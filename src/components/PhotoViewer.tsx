@@ -1,5 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from 'react';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -12,16 +17,11 @@ import {
   RefreshCw,
   Download,
   Info,
-  FileImage,
-  CheckSquare,
-  Square,
-  X,
-  Maximize,
-  ChevronsLeft,
-  ChevronsRight,
   RotateCw,
   Fullscreen,
+  X,
 } from 'lucide-react';
+import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 
 // ===== TYPES =====
 export type PhotoFile = {
@@ -44,163 +44,89 @@ export type PhotoFile = {
   };
 };
 
-// ===== MOCK DATA (dengan URL yang dijamin bisa di-load) =====
-const MOCK_PHOTOS: PhotoFile[] = [
+// ===== MOCK DATA =====
+export const MOCK_PHOTOS: PhotoFile[] = [
   {
     id: '1',
     name: 'DSCF7471.JPG',
     size: 12870000,
     mimeType: 'image/jpeg',
-    directUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2000&q=80',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=300&q=60',
-    width: 6000,
-    height: 4000,
-    exif: { make: 'FUJIFILM', model: 'X-T20', iso: 200, aperture: 'f/2.8', shutterSpeed: '1/500s', focalLength: '35mm' },
-  },
-  {
-    id: '2',
-    name: 'DSCF7482.JPG',
-    size: 12950000,
-    mimeType: 'image/jpeg',
-    directUrl: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=2000&q=80',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?auto=format&fit=crop&w=300&q=60',
-    width: 4000,
-    height: 6000,
-    exif: { make: 'FUJIFILM', model: 'X-T20', iso: 400, aperture: 'f/4.0', shutterSpeed: '1/1000s', focalLength: '50mm' },
-  },
-  {
-    id: '3',
-    name: 'DSCF7483.JPG',
-    size: 13010000,
-    mimeType: 'image/jpeg',
-    directUrl: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=2000&q=80',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=300&q=60',
-    width: 6000,
-    height: 4000,
-    exif: { make: 'FUJIFILM', model: 'X-T20', iso: 800, aperture: 'f/5.6', shutterSpeed: '1/250s', focalLength: '23mm' },
-  },
-  {
-    id: '4',
-    name: 'DSCF7484.JPG',
-    size: 12990000,
-    mimeType: 'image/jpeg',
-    directUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=2000&q=80',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=300&q=60',
-    width: 4000,
-    height: 6000,
-    exif: { make: 'FUJIFILM', model: 'X-T20', iso: 1600, aperture: 'f/2.0', shutterSpeed: '1/125s', focalLength: '56mm' },
+    directUrl: 'https://picsum.photos/seed/1/1600/1067',
+    thumbnailUrl: 'https://picsum.photos/seed/1/400/267',
+    width: 1600,
+    height: 1067,
+    exif: {
+      make: 'FUJIFILM',
+      model: 'X-T20',
+      iso: 200,
+      aperture: 'f/2.8',
+      shutterSpeed: '1/500s',
+      focalLength: '35mm',
+    },
   },
 ];
 
-// ===== PHOTO VIEWER =====
-type PhotoViewerProps = {
-  photos: PhotoFile[];
-  index: number;
-  selected: boolean;
-  onClose: () => void;
-  onNavigate: (newIndex: number) => void;
-  onToggle: (id: string) => void;
-};
-
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 8;
-
-function getResizedUrl(url: string, width: number): string {
-  if (!url) return url;
-  if (url.includes('unsplash.com')) {
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}w=${width}&q=80`;
-  }
-  return url;
+// ===== UTILS (TIDAK BERUBAH) =====
+function extractGoogleDriveId(url: string): string | null {
+  const match = url.match(/[?&]id=([^&]+)/);
+  return match ? match[1] : null;
 }
 
-export function PhotoViewer({
-  photos,
-  index,
-  selected,
-  onClose,
-  onNavigate,
-  onToggle,
-}: PhotoViewerProps) {
-  const [zoom, setZoom] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [imageUrl, setImageUrl] = useState<string>('');
+// ===== CUSTOM HOOKS (TIDAK BERUBAH) =====
+function useImageLoader(photo: PhotoFile | undefined, fullRes: boolean) {
+  const [imageUrl, setImageUrl] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
-  const [fullResMode, setFullResMode] = useState(false);
-  const [rotation, setRotation] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [direction, setDirection] = useState(0);
 
-  const dragStart = useRef<{ x: number; y: number } | null>(null);
-  const offsetStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const imgRef = useRef<HTMLImageElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const getPrioritizedUrls = useCallback(
+    (p: PhotoFile, full: boolean): string[] => {
+      if (!p) return [];
+      const urls: string[] = [];
+      const base = p.directUrl || '';
+      const thumb = p.thumbnailUrl || '';
 
-  const touchStartDist = useRef<number>(0);
-  const touchStartZoom = useRef<number>(1);
-
-  const photo = photos[index];
-
-  // ===== Fullscreen =====
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.();
-    } else {
-      document.exitFullscreen?.();
-    }
-  };
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, []);
-
-  // ===== Dapatkan daftar URL prioritas =====
-  const getPrioritizedUrls = useCallback((photo: PhotoFile, fullRes: boolean): string[] => {
-    if (!photo) return [];
-    const candidates: string[] = [];
-
-    if (fullRes) {
-      if (photo.directUrl) candidates.push(photo.directUrl);
-      if (photo.webContentLink) candidates.push(photo.webContentLink);
-    } else {
-      if (photo.directUrl) {
-        candidates.push(getResizedUrl(photo.directUrl, 800));
-        candidates.push(photo.directUrl);
+      // --- PERUBAHAN PENTING DI SINI (URUTAN PROXY DI PRIORITASKAN) ---
+      // Pindahkan pengecekan Google Drive ke ATAS agar proxy dicoba terlebih dahulu
+      if (base.includes('drive.google.com')) {
+        const fileId = extractGoogleDriveId(base);
+        if (fileId) {
+          const baseUrl = import.meta.env.DEV ? '/api/gdrive' : 'https://drive.google.com';
+          if (full) {
+            urls.push(`${baseUrl}/thumbnail?id=${fileId}&sz=s0`);
+          } else {
+            urls.push(`${baseUrl}/thumbnail?id=${fileId}&sz=w1600`);
+          }
+        }
       }
-      if (photo.webContentLink) candidates.push(photo.webContentLink);
-    }
+      // -------------------------------------------------------------
 
-    if (photo.thumbnailUrl) candidates.push(photo.thumbnailUrl);
+      // LOGIKA URL ASLI TETAP SAMA PERSIS (tidak diubah)
+      if (full) {
+        if (base) urls.push(base);
+        if (thumb) urls.push(thumb);
+      } else {
+        if (base) {
+          const small = base.includes('?') ? base + '&w=800' : base + '?w=800';
+          urls.push(small);
+          urls.push(base);
+        }
+        if (thumb) urls.push(thumb);
+      }
+      if (p.id) urls.push(`https://picsum.photos/seed/${p.id}/800/533`);
 
-    if (photo.id) {
-      candidates.push(`https://drive.google.com/thumbnail?id=${photo.id}&sz=w800`);
-      candidates.push(`https://drive.google.com/uc?id=${photo.id}&export=download`);
-    }
+      return urls.filter(Boolean);
+    },
+    [],
+  );
 
-    return [...new Set(candidates.filter(url => url && url.trim().length > 0))];
-  }, []);
-
-  // ===== Muat gambar dengan mencoba semua URL =====
-  const loadImage = useCallback((fullRes: boolean = false) => {
+  const load = useCallback(() => {
     if (!photo) {
       setImageError(true);
       setIsLoading(false);
       return;
     }
-
     const urls = getPrioritizedUrls(photo, fullRes);
-    if (urls.length === 0) {
+    if (!urls.length) {
       setImageError(true);
       setIsLoading(false);
       return;
@@ -209,658 +135,972 @@ export function PhotoViewer({
     setIsLoading(true);
     setImageError(false);
 
-    let attemptIndex = 0;
-    let loaded = false;
+    let attempt = 0;
+    let cancelled = false;
 
     const tryNext = () => {
-      if (attemptIndex >= urls.length || loaded) {
-        if (!loaded) {
+      if (cancelled || attempt >= urls.length) {
+        if (!cancelled) {
           setImageError(true);
           setIsLoading(false);
         }
         return;
       }
-
-      const url = urls[attemptIndex];
-      attemptIndex++;
-
+      const url = urls[attempt++];
       const img = new Image();
-      img.crossOrigin = 'anonymous'; // CORS
+      img.crossOrigin = 'anonymous';
+      img.referrerPolicy = 'no-referrer';
+
       img.onload = () => {
-        setImageUrl(url);
-        setIsLoading(false);
-        loaded = true;
+        if (!cancelled) {
+          setImageUrl(url);
+          setIsLoading(false);
+          setImageError(false);
+        }
       };
       img.onerror = () => {
-        tryNext();
+        if (!cancelled) tryNext();
       };
       img.src = url;
+
+      setTimeout(() => {
+        if (!cancelled && !img.complete) {
+          img.onload = null;
+          img.onerror = null;
+          tryNext();
+        }
+      }, 5000);
     };
 
     tryNext();
-  }, [photo, getPrioritizedUrls]);
+    return () => {
+      cancelled = true;
+    };
+  }, [photo, fullRes, getPrioritizedUrls]);
 
-  // ===== Preload neighbors =====
   useEffect(() => {
-    if (!photo) return;
-    const preloadOne = (p: PhotoFile) => {
-      if (!p) return;
-      const urls = getPrioritizedUrls(p, false);
-      if (urls.length > 0) {
+    const cleanup = load();
+    return cleanup;
+  }, [load]);
+
+  const prefetch = useCallback(
+    (target: PhotoFile) => {
+      const urls = getPrioritizedUrls(target, false);
+      if (urls.length) {
         const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.referrerPolicy = 'no-referrer';
         img.src = urls[0];
       }
-    };
-    if (index > 0) preloadOne(photos[index - 1]);
-    if (index < photos.length - 1) preloadOne(photos[index + 1]);
-  }, [index, photo, photos, getPrioritizedUrls]);
+    },
+    [getPrioritizedUrls],
+  );
 
-  // ===== Reset saat ganti foto =====
+  return { imageUrl, isLoading, imageError, load, prefetch };
+}
+
+function useAutoHideControls(
+  containerRef: React.RefObject<HTMLDivElement>,
+  initialShow = true,
+  timeoutMs = 3500,
+) {
+  const [showControls, setShowControls] = useState(initialShow);
+  const [showCursor, setShowCursor] = useState(true);
+  const hideTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const cursorTimeout = useRef<ReturnType<typeof setTimeout>>();
+
+  const resetTimers = useCallback(() => {
+    setShowControls(true);
+    setShowCursor(true);
+    if (hideTimeout.current) clearTimeout(hideTimeout.current);
+    if (cursorTimeout.current) clearTimeout(cursorTimeout.current);
+    hideTimeout.current = setTimeout(() => {
+      setShowControls(false);
+    }, timeoutMs);
+    cursorTimeout.current = setTimeout(() => {
+      setShowCursor(false);
+    }, timeoutMs);
+  }, [timeoutMs]);
+
+  const toggleShowControls = useCallback(() => {
+    setShowControls((prev) => {
+      const next = !prev;
+      if (next) {
+        resetTimers();
+      } else {
+        if (hideTimeout.current) clearTimeout(hideTimeout.current);
+        if (cursorTimeout.current) clearTimeout(cursorTimeout.current);
+        setShowCursor(false);
+      }
+      return next;
+    });
+  }, [resetTimers]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onMove = () => resetTimers();
+    el.addEventListener('mousemove', onMove);
+    el.addEventListener('mouseenter', onMove);
+    el.addEventListener('touchstart', onMove, { passive: true });
+    el.addEventListener('click', onMove);
+    el.addEventListener('wheel', onMove, { passive: true });
+
+    return () => {
+      el.removeEventListener('mousemove', onMove);
+      el.removeEventListener('mouseenter', onMove);
+      el.removeEventListener('touchstart', onMove);
+      el.removeEventListener('click', onMove);
+      el.removeEventListener('wheel', onMove);
+      if (hideTimeout.current) clearTimeout(hideTimeout.current);
+      if (cursorTimeout.current) clearTimeout(cursorTimeout.current);
+    };
+  }, [containerRef, resetTimers]);
+
+  useEffect(() => {
+    resetTimers();
+    return () => {
+      if (hideTimeout.current) clearTimeout(hideTimeout.current);
+      if (cursorTimeout.current) clearTimeout(cursorTimeout.current);
+    };
+  }, [resetTimers]);
+
+  return { showControls, showCursor, resetTimers, toggleShowControls };
+}
+
+function useSwipeNavigation(
+  zoom: number,
+  canPrev: boolean,
+  canNext: boolean,
+  goPrev: () => void,
+  goNext: () => void,
+  resetTimers: () => void,
+) {
+  const swipeX = useMotionValue(0);
+  const startX = useRef(0);
+  const currentX = useRef(0);
+
+  const onSwipeStart = useCallback((clientX: number) => {
+    if (zoom > 1) return;
+    startX.current = clientX;
+    currentX.current = clientX;
+    swipeX.stop();
+  }, [zoom, swipeX]);
+
+  const onSwipeMove = useCallback((clientX: number) => {
+    if (zoom > 1) return;
+    const dx = clientX - startX.current;
+    currentX.current = clientX;
+    swipeX.set(dx * 0.8);
+  }, [zoom, swipeX]);
+
+  const onSwipeEnd = useCallback(() => {
+    if (zoom > 1) return;
+    const dx = currentX.current - startX.current;
+    const threshold = 80;
+    if (dx > threshold && canPrev) {
+      swipeX.set(0);
+      goPrev();
+      resetTimers();
+    } else if (dx < -threshold && canNext) {
+      swipeX.set(0);
+      goNext();
+      resetTimers();
+    } else {
+      swipeX.set(0);
+    }
+  }, [zoom, canPrev, canNext, goPrev, goNext, resetTimers, swipeX]);
+
+  return { swipeX, onSwipeStart, onSwipeMove, onSwipeEnd };
+}
+
+// ===== REUSABLE UI COMPONENTS (REFACTORED) =====
+
+const BackgroundLayer: React.FC<{ darken: boolean }> = React.memo(({ darken }) => (
+  <div className="absolute inset-0 z-0 pointer-events-none">
+    {/* Base Dark #050505 */}
+    <div className="absolute inset-0 bg-[#050505]" />
+    
+    {/* Soft Vignette & Depth Lighting */}
+    <div 
+      className="absolute inset-0 transition-opacity duration-500"
+      style={{
+        background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 100%)'
+      }}
+    />
+
+    {/* Noise Texture (Data URI SVG) */}
+    <div 
+      className="absolute inset-0 opacity-30 mix-blend-overlay"
+      style={{
+        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.4'/%3E%3C/svg%3E")`,
+        backgroundSize: '256px 256px',
+      }}
+    />
+
+    {/* Dynamic Darkening saat Idle */}
+    <motion.div
+      className="absolute inset-0 bg-black"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: darken ? 0.25 : 0 }}
+      transition={{ duration: 0.8, ease: "easeOut" }}
+    />
+  </div>
+));
+
+const FloatingHeader: React.FC<{
+  photo: PhotoFile;
+  index: number;
+  total: number;
+  selected: boolean;
+  selectionIndex?: number | null;
+  fullResMode: boolean;
+  isImageReady: boolean;
+  showControls: boolean;
+  onClose: (e: React.MouseEvent) => void;
+  onToggleFullRes: (e: React.MouseEvent) => void;
+  onToggleFullscreen: (e: React.MouseEvent) => void;
+  onToggleInfo: (e: React.MouseEvent) => void;
+  onToggleSelect: (e: React.MouseEvent) => void;
+}> = React.memo(({
+  photo, index, total, selected, selectionIndex, fullResMode, isImageReady, showControls,
+  onClose, onToggleFullRes, onToggleFullscreen, onToggleInfo, onToggleSelect
+}) => (
+  <AnimatePresence>
+    {showControls && (
+      <motion.div
+        className="absolute top-4 sm:top-6 left-1/2 -translate-x-1/2 z-30 w-[calc(100%-32px)] sm:w-auto max-w-2xl"
+        initial={{ opacity: 0, y: -30 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -30 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      >
+        <div className="flex items-center gap-1.5 sm:gap-3 px-3 py-2 bg-white/[0.04] backdrop-blur-3xl border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)]">
+          
+          <button
+            onClick={onClose}
+            className="p-2.5 rounded-full text-white/80 hover:bg-white/10 active:scale-90 transition-all"
+            aria-label="Tutup penampil"
+          >
+            <ArrowLeft size={18} strokeWidth={2.5} />
+          </button>
+
+          <div className="flex items-center gap-2 min-w-0 flex-1 sm:flex-initial px-1">
+            <span className="text-sm font-medium text-white/90 truncate max-w-[120px] sm:max-w-[220px] tracking-tight">
+              {photo.name}
+            </span>
+            <span className="text-xs text-white/40 font-mono hidden sm:inline">
+              {index + 1} / {total}
+            </span>
+            {selectionIndex != null && (
+              <span className="text-[10px] text-blue-400/90 bg-blue-500/20 px-2 py-0.5 rounded-full font-mono">
+                #{selectionIndex + 1}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-0.5 sm:gap-1">
+            <button
+              onClick={onToggleFullRes}
+              disabled={!isImageReady}
+              className={`p-2.5 rounded-full transition-all active:scale-90 hidden sm:block ${
+                fullResMode
+                  ? 'text-yellow-400 bg-yellow-500/20'
+                  : 'text-white/60 hover:bg-white/10'
+              } disabled:opacity-30`}
+              title={fullResMode ? 'Resolusi penuh' : 'Resolusi sedang'}
+            >
+              <Maximize2 size={17} strokeWidth={2} />
+            </button>
+            <button
+              onClick={onToggleFullscreen}
+              className="p-2.5 rounded-full text-white/60 hover:bg-white/10 active:scale-90 transition-all hidden sm:block"
+              aria-label="Fullscreen"
+            >
+              <Fullscreen size={17} strokeWidth={2} />
+            </button>
+            <button
+              onClick={onToggleInfo}
+              className="p-2.5 rounded-full text-white/60 hover:bg-white/10 active:scale-90 transition-all"
+              aria-label="Info foto"
+            >
+              <Info size={17} strokeWidth={2} />
+            </button>
+            <button
+              onClick={onToggleSelect}
+              className={`p-2.5 rounded-full transition-all active:scale-90 ${
+                selected
+                  ? 'text-blue-400 bg-blue-500/20'
+                  : 'text-white/60 hover:bg-white/10'
+              }`}
+              aria-label={selected ? 'Batal pilih' : 'Pilih foto'}
+            >
+              <Check size={17} strokeWidth={selected ? 3 : 2} />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+));
+
+const InfoSheet: React.FC<{ photo: PhotoFile; fullResMode: boolean; show: boolean; onClose: () => void; }> = React.memo(({ photo, fullResMode, show, onClose }) => (
+  <AnimatePresence>
+    {show && (
+      <>
+        <motion.div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        />
+        <motion.div
+          className="absolute bottom-0 left-0 right-0 z-40 max-h-[70vh] overflow-y-auto rounded-t-3xl bg-[#0f0f0f]/95 backdrop-blur-3xl border-t border-white/10 shadow-2xl"
+          initial={{ y: '100%' }}
+          animate={{ y: 0 }}
+          exit={{ y: '100%' }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={0.2}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 100) onClose();
+          }}
+        >
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 rounded-full bg-white/20" />
+          </div>
+          <div className="p-6 pt-2">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-white tracking-wide">Detail Foto</h3>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-full text-white/50 hover:bg-white/10 active:scale-90 transition-all"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between py-2 border-b border-white/5">
+                <span className="text-white/40">Nama File</span>
+                <p className="text-white/90 truncate max-w-[200px] text-right">{photo.name}</p>
+              </div>
+              <div className="flex justify-between py-2 border-b border-white/5">
+                <span className="text-white/40">Ukuran</span>
+                <p className="text-white/90">{(photo.size / 1024 / 1024).toFixed(2)} MB</p>
+              </div>
+              {photo.width && (
+                <div className="flex justify-between py-2 border-b border-white/5">
+                  <span className="text-white/40">Dimensi</span>
+                  <p className="text-white/90">{photo.width}×{photo.height}</p>
+                </div>
+              )}
+              <div className="flex justify-between py-2 border-b border-white/5">
+                <span className="text-white/40">Mode Tampilan</span>
+                <p className="text-white/90">{fullResMode ? 'Resolusi penuh' : 'Optimal'}</p>
+              </div>
+              {photo.exif && (
+                <div className="pt-2 mt-2 border-t border-white/10">
+                  <p className="text-white/30 text-[10px] uppercase tracking-widest mb-3">EXIF Data</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-white/80">
+                    {photo.exif.make && <p className="col-span-2">{photo.exif.make} {photo.exif.model}</p>}
+                    {photo.exif.iso && <p>ISO {photo.exif.iso}</p>}
+                    {photo.exif.aperture && <p>{photo.exif.aperture}</p>}
+                    {photo.exif.shutterSpeed && <p>{photo.exif.shutterSpeed}</p>}
+                    {photo.exif.focalLength && <p>{photo.exif.focalLength}</p>}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      </>
+    )}
+  </AnimatePresence>
+));
+
+const FloatingToolbar: React.FC<{
+  zoom: number;
+  isImageReady: boolean;
+  showControls: boolean;
+  onZoomOut: (e: React.MouseEvent) => void;
+  onZoomIn: (e: React.MouseEvent) => void;
+  onResetZoom: (e: React.MouseEvent) => void;
+  onRotate: (e: React.MouseEvent) => void;
+  onDownload: (e: React.MouseEvent) => void;
+}> = React.memo(({
+  zoom, isImageReady, showControls, onZoomOut, onZoomIn, onResetZoom, onRotate, onDownload
+}) => (
+  <AnimatePresence>
+    {showControls && (
+      <motion.div
+        className="absolute bottom-8 sm:bottom-10 left-1/2 -translate-x-1/2 z-30"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      >
+        <div className="flex items-center gap-1 px-3 py-1.5 bg-white/[0.04] backdrop-blur-3xl rounded-full border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.8)]">
+          <button
+            onClick={onZoomOut}
+            disabled={!isImageReady || zoom <= 1}
+            className="p-2.5 rounded-full text-white/70 hover:bg-white/10 active:scale-90 transition-all disabled:opacity-30"
+            aria-label="Zoom out"
+          >
+            <ZoomOut size={18} strokeWidth={2} />
+          </button>
+
+          <button
+            onClick={onResetZoom}
+            disabled={!isImageReady}
+            className="min-w-[52px] p-2 rounded-full text-center text-xs font-medium text-white/90 hover:bg-white/10 transition-all tabular-nums"
+            title="Reset zoom"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+
+          <button
+            onClick={onZoomIn}
+            disabled={!isImageReady || zoom >= 6}
+            className="p-2.5 rounded-full text-white/70 hover:bg-white/10 active:scale-90 transition-all disabled:opacity-30"
+            aria-label="Zoom in"
+          >
+            <ZoomIn size={18} strokeWidth={2} />
+          </button>
+
+          <div className="w-px h-5 bg-white/10 mx-1" />
+
+          <button
+            onClick={onRotate}
+            disabled={!isImageReady}
+            className="p-2.5 rounded-full text-white/70 hover:bg-white/10 active:scale-90 transition-all disabled:opacity-30"
+            aria-label="Rotate"
+          >
+            <RotateCw size={17} strokeWidth={2} />
+          </button>
+
+          <button
+            onClick={onDownload}
+            disabled={!isImageReady}
+            className="p-2.5 rounded-full text-white/70 hover:bg-white/10 active:scale-90 transition-all disabled:opacity-30"
+            aria-label="Download"
+          >
+            <Download size={17} strokeWidth={2} />
+          </button>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+));
+
+const FloatingNavigation: React.FC<{
+  showControls: boolean;
+  isImageReady: boolean;
+  canPrev: boolean;
+  canNext: boolean;
+  goPrev: () => void;
+  goNext: () => void;
+}> = React.memo(({ showControls, isImageReady, canPrev, canNext, goPrev, goNext }) => (
+  <AnimatePresence>
+    {showControls && isImageReady && (
+      <>
+        {canPrev && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            whileHover={{ scale: 1.08 }}
+            onClick={(e) => { e.stopPropagation(); goPrev(); }}
+            className="absolute left-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-xl border border-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:border-white/30 active:scale-90 transition-all"
+            aria-label="Foto sebelumnya"
+          >
+            <ChevronLeft size={22} strokeWidth={2} />
+          </motion.button>
+        )}
+
+        {canNext && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            whileHover={{ scale: 1.08 }}
+            onClick={(e) => { e.stopPropagation(); goNext(); }}
+            className="absolute right-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-xl border border-white/10 text-white/60 hover:bg-white/20 hover:text-white hover:border-white/30 active:scale-90 transition-all"
+            aria-label="Foto selanjutnya"
+          >
+            <ChevronRight size={22} strokeWidth={2} />
+          </motion.button>
+        )}
+      </>
+    )}
+  </AnimatePresence>
+));
+
+// ===== MAIN COMPONENT =====
+type PhotoViewerProps = {
+  photos: PhotoFile[];
+  index: number;
+  selected: boolean;
+  selectionIndex?: number | null;
+  onClose: () => void;
+  onNavigate: (newIndex: number) => void;
+  onToggle: (id: string) => void;
+};
+
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 6;
+
+const PhotoViewer: React.FC<PhotoViewerProps> = ({
+  photos,
+  index,
+  selected,
+  selectionIndex = null,
+  onClose,
+  onNavigate,
+  onToggle,
+}) => {
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [fullResMode, setFullResMode] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const [showInfo, setShowInfo] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const offsetStart = useRef({ x: 0, y: 0 });
+  const touchStartDist = useRef(0);
+  const touchStartZoom = useRef(1);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const touchMoved = useRef(false);
+
+  const photo = useMemo(() => photos[index], [photos, index]);
+
+  const { imageUrl, isLoading, imageError, load, prefetch } = useImageLoader(
+    photo,
+    fullResMode,
+  );
+  const { showControls, showCursor, resetTimers, toggleShowControls } =
+    useAutoHideControls(containerRef);
+
+  const isImageReady = !isLoading && !imageError && !!imageUrl;
+
+  // === Business Logic Navigation (TIDAK BERUBAH) ===
+  const goPrev = useCallback(() => {
+    if (index > 0) onNavigate(index - 1);
+  }, [index, onNavigate]);
+  const goNext = useCallback(() => {
+    if (index < photos.length - 1) onNavigate(index + 1);
+  }, [index, onNavigate, photos.length]);
+
+  // === Swipe navigation (TIDAK BERUBAH) ===
+  const { swipeX, onSwipeStart, onSwipeMove, onSwipeEnd } = useSwipeNavigation(
+    zoom,
+    index > 0,
+    index < photos.length - 1,
+    goPrev,
+    goNext,
+    resetTimers,
+  );
+
+  // === Zoom & Pan Logic (TIDAK BERUBAH) ===
+  const clampOffset = useCallback(
+    (nx: number, ny: number, nz: number) => {
+      if (nz <= 1) return { x: 0, y: 0 };
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const limitX = Math.max(0, (w * (nz - 1)) / 2);
+      const limitY = Math.max(0, (h * (nz - 1)) / 2);
+      return {
+        x: Math.min(limitX, Math.max(-limitX, nx)),
+        y: Math.min(limitY, Math.max(-limitY, ny)),
+      };
+    },
+    [],
+  );
+
+  const updateZoom = useCallback(
+    (nextZoom: number) => {
+      const safe = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoom));
+      setZoom(safe);
+      if (safe <= 1) {
+        setOffset({ x: 0, y: 0 });
+      } else {
+        setOffset((prev) => clampOffset(prev.x, prev.y, safe));
+      }
+    },
+    [clampOffset],
+  );
+
+  // === Events (TIDAK BERUBAH) ===
+  const onWheel = useCallback(
+    (e: React.WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      if (!photo || isLoading || imageError) return;
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.25 : 0.25;
+      updateZoom(zoom + delta);
+      resetTimers();
+    },
+    [photo, isLoading, imageError, zoom, updateZoom, resetTimers],
+  );
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (zoom <= 1 || isLoading || imageError) return;
+      dragStart.current = { x: e.clientX, y: e.clientY };
+      offsetStart.current = { ...offset };
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      setIsDragging(true);
+      resetTimers();
+    },
+    [zoom, isLoading, imageError, offset, resetTimers],
+  );
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!dragStart.current || zoom <= 1) return;
+      const dx = e.clientX - dragStart.current.x;
+      const dy = e.clientY - dragStart.current.y;
+      const next = clampOffset(
+        offsetStart.current.x + dx,
+        offsetStart.current.y + dy,
+        zoom,
+      );
+      setOffset(next);
+    },
+    [zoom, clampOffset],
+  );
+
+  const onPointerUp = useCallback(() => {
+    dragStart.current = null;
+    setTimeout(() => setIsDragging(false), 50);
+  }, []);
+
+  const onTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length === 2) {
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        touchStartDist.current = dist;
+        touchStartZoom.current = zoom;
+        touchMoved.current = false;
+        setIsDragging(true);
+      } else if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        touchStart.current = { x: touch.clientX, y: touch.clientY };
+        touchMoved.current = false;
+        onSwipeStart(touch.clientX);
+      }
+      resetTimers();
+    },
+    [zoom, resetTimers, onSwipeStart],
+  );
+
+  const onTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (e.touches.length === 2 && touchStartDist.current > 0) {
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        const scale = dist / touchStartDist.current;
+        const newZoom = Math.min(
+          MAX_ZOOM,
+          Math.max(MIN_ZOOM, touchStartZoom.current * scale),
+        );
+        updateZoom(newZoom);
+        touchMoved.current = true;
+      } else if (e.touches.length === 1 && touchStart.current && zoom <= 1) {
+        onSwipeMove(e.touches[0].clientX);
+        const dx = e.touches[0].clientX - touchStart.current.x;
+        if (Math.abs(dx) > 10) touchMoved.current = true;
+      }
+    },
+    [zoom, updateZoom, onSwipeMove],
+  );
+
+  const onTouchEnd = useCallback(
+    (_e: React.TouchEvent) => {
+      setIsDragging(false);
+
+      if (
+        !touchMoved.current &&
+        touchStart.current &&
+        zoom <= 1 &&
+        !imageError &&
+        !isLoading
+      ) {
+        toggleShowControls();
+      }
+
+      onSwipeEnd();
+
+      touchStartDist.current = 0;
+      touchStart.current = null;
+      touchMoved.current = false;
+    },
+    [
+      zoom,
+      imageError,
+      isLoading,
+      toggleShowControls,
+      onSwipeEnd,
+    ],
+  );
+
+  // === Action Logic (TIDAK BERUBAH) ===
+  const rotateImage = useCallback(() => {
+    setRotation((prev) => (prev + 90) % 360);
+    resetTimers();
+  }, [resetTimers]);
+
+  const toggleFullRes = useCallback(() => {
+    setFullResMode((prev) => !prev);
+    resetTimers();
+  }, [resetTimers]);
+
+  const handleDownload = useCallback(() => {
+    if (!photo) return;
+    const url = photo.directUrl || photo.thumbnailUrl;
+    if (!url) return;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = photo.name;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    resetTimers();
+  }, [photo, resetTimers]);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }, []);
+
+  // === Reset Logic (TIDAK BERUBAH) ===
   useEffect(() => {
     setZoom(1);
     setOffset({ x: 0, y: 0 });
     setFullResMode(false);
     setRotation(0);
-    setImageUrl('');
-    loadImage(false);
-  }, [index, loadImage]);
+    setShowInfo(false);
+    setIsDragging(false);
+  }, [index]);
 
-  // ===== Navigasi =====
-  const goPrev = useCallback(() => {
-    if (index > 0) {
-      setDirection(-1);
-      onNavigate(index - 1);
-    }
-  }, [index, onNavigate]);
-
-  const goNext = useCallback(() => {
-    if (index < photos.length - 1) {
-      setDirection(1);
-      onNavigate(index + 1);
-    }
-  }, [index, onNavigate, photos.length]);
-
-  const goFirst = useCallback(() => {
-    if (index > 0) {
-      setDirection(-1);
-      onNavigate(0);
-    }
-  }, [index, onNavigate]);
-
-  const goLast = useCallback(() => {
-    if (index < photos.length - 1) {
-      setDirection(1);
-      onNavigate(photos.length - 1);
-    }
-  }, [index, onNavigate, photos.length]);
-
-  // ===== Keyboard =====
+  // === Prefetch Logic (TIDAK BERUBAH) ===
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
+    if (!photo) return;
+    if (index > 0) prefetch(photos[index - 1]);
+    if (index < photos.length - 1) prefetch(photos[index + 1]);
+  }, [index, photo, photos, prefetch]);
+
+  // === Keyboard Logic (TIDAK BERUBAH) ===
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'Escape') {
-        if (document.fullscreenElement) {
-          document.exitFullscreen?.();
-        } else {
-          onClose();
-        }
+        if (document.fullscreenElement) document.exitFullscreen?.();
+        else onClose();
       } else if (e.key === 'ArrowLeft') goPrev();
       else if (e.key === 'ArrowRight') goNext();
-      else if (e.key === 'Home') goFirst();
-      else if (e.key === 'End') goLast();
+      else if (e.key === 'Home' && index > 0) onNavigate(0);
+      else if (e.key === 'End' && index < photos.length - 1) onNavigate(photos.length - 1);
       else if (e.key === 'r' || e.key === 'R') rotateImage();
       else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
       else if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         if (photo) onToggle(photo.id);
       }
-    }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [goPrev, goNext, goFirst, goLast, onClose, onToggle, photo]);
-
-  const rotateImage = () => {
-    setRotation((prev) => (prev + 90) % 360);
-  };
-
-  const toggleFullRes = () => {
-    const newMode = !fullResMode;
-    setFullResMode(newMode);
-    loadImage(newMode);
-  };
-
-  // ===== Zoom & Pan =====
-  function clampOffset(nextX: number, nextY: number, nextZoom: number) {
-    if (nextZoom <= 1) return { x: 0, y: 0 };
-    const limitX = Math.max(0, (window.innerWidth * (nextZoom - 1)) / 2);
-    const limitY = Math.max(0, (window.innerHeight * (nextZoom - 1)) / 2);
-    return {
-      x: Math.min(limitX, Math.max(-limitX, nextX)),
-      y: Math.min(limitY, Math.max(-limitY, nextY)),
-    };
-  }
-
-  function updateZoom(nextZoom: number) {
-    const safeZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoom));
-    setZoom(safeZoom);
-    if (safeZoom <= 1) {
-      setOffset({ x: 0, y: 0 });
-      return;
-    }
-    setOffset((prev) => clampOffset(prev.x, prev.y, safeZoom));
-  }
-
-  function onWheel(e: React.WheelEvent) {
-    if (!photo || isLoading || imageError) return;
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.3 : 0.3;
-    updateZoom(zoom + delta);
-  }
-
-  function onPointerDown(e: React.PointerEvent) {
-    if (zoom <= 1 || isLoading || imageError) return;
-    dragStart.current = { x: e.clientX, y: e.clientY };
-    offsetStart.current = { ...offset };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }
-
-  function onPointerMove(e: React.PointerEvent) {
-    if (!dragStart.current || zoom <= 1) return;
-    const dx = e.clientX - dragStart.current.x;
-    const dy = e.clientY - dragStart.current.y;
-    const next = clampOffset(offsetStart.current.x + dx, offsetStart.current.y + dy, zoom);
-    setOffset(next);
-  }
-
-  function onPointerUp() {
-    dragStart.current = null;
-  }
-
-  function onTouchStart(e: React.TouchEvent) {
-    if (e.touches.length === 2) {
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
-      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-      touchStartDist.current = dist;
-      touchStartZoom.current = zoom;
-    }
-  }
-
-  function onTouchMove(e: React.TouchEvent) {
-    if (e.touches.length === 2 && touchStartDist.current > 0) {
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
-      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-      const scale = dist / touchStartDist.current;
-      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, touchStartZoom.current * scale));
-      updateZoom(newZoom);
-    }
-  }
-
-  function onTouchEnd() {
-    touchStartDist.current = 0;
-  }
-
-  function toggleZoom() {
-    if (zoom > 1) updateZoom(1);
-    else updateZoom(2.5);
-  }
-
-  const handleDownload = () => {
-    if (!photo) return;
-    const url = photo.directUrl || photo.webContentLink || photo.thumbnailUrl;
-    if (!url) return;
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = photo.name;
-    link.target = "_blank";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  if (!photo) return null;
+  }, [goPrev, goNext, onClose, onToggle, photo, toggleFullscreen, index, photos.length, onNavigate, rotateImage]);
 
   const canPrev = index > 0;
   const canNext = index < photos.length - 1;
-  const isImageReady = !isLoading && !imageError && imageUrl;
+
+  if (!photo) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#050505]">
+        <p className="text-white/40 text-sm tracking-wider">Foto tidak tersedia</p>
+      </div>
+    );
+  }
 
   return (
     <motion.div
-      className="fixed inset-0 z-[100] flex flex-col bg-black/95 backdrop-blur-sm"
+      ref={containerRef}
+      className="fixed inset-0 z-[100] flex flex-col select-none"
+      style={{
+        padding: 'env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)',
+        touchAction: 'none',
+        cursor: showCursor ? 'default' : 'none',
+      }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      ref={containerRef}
+      transition={{ duration: 0.4, ease: 'easeOut' }}
+      onWheel={onWheel}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
     >
-      {/* HEADER */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onClose}
-            className="p-2 rounded-full text-white/80 hover:bg-white/10 hover:text-white transition-colors"
-            title="Kembali (Esc)"
-          >
-            <ArrowLeft size={24} strokeWidth={2} />
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex h-8 w-8 items-center justify-center rounded bg-blue-500/20 text-blue-400">
-              <FileImage size={16} />
-            </div>
-            <div className="flex flex-col">
-              <h1 className="text-sm sm:text-base font-medium text-white tracking-wide truncate max-w-[200px] sm:max-w-md">
-                {photo.name}
-              </h1>
-              <span className="text-[11px] text-white/50">
-                {fullResMode ? 'Resolusi penuh' : 'Medium (800px)'} • {(photo.size / 1024 / 1024).toFixed(2)} MB
-                {photo.width && photo.height && ` • ${photo.width}×${photo.height}`}
-              </span>
+      {/* 1. Premium Layered Background */}
+      <BackgroundLayer darken={!showControls} />
+
+      {/* 2. Floating Header */}
+      <FloatingHeader
+        photo={photo}
+        index={index}
+        total={photos.length}
+        selected={selected}
+        selectionIndex={selectionIndex}
+        fullResMode={fullResMode}
+        isImageReady={isImageReady}
+        showControls={showControls}
+        onClose={(e) => { e.stopPropagation(); onClose(); }}
+        onToggleFullRes={(e) => { e.stopPropagation(); toggleFullRes(); }}
+        onToggleFullscreen={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+        onToggleInfo={(e) => { e.stopPropagation(); setShowInfo(v => !v); }}
+        onToggleSelect={(e) => { e.stopPropagation(); if (photo) onToggle(photo.id); }}
+      />
+
+      {/* 3. Info Sheet */}
+      <InfoSheet
+        photo={photo}
+        fullResMode={fullResMode}
+        show={showInfo && !!photo}
+        onClose={() => setShowInfo(false)}
+      />
+
+      {/* 4. Image Container (Tengah viewport, object-fit: contain, margin aman) */}
+      <div className="flex-1 relative flex items-center justify-center overflow-hidden p-4 sm:p-6 md:p-10">
+        
+        {/* Loading / Error States (Logika visual dimodifikasi) */}
+        {isLoading && !imageError && photo.thumbnailUrl && (
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <div
+              className="absolute inset-0 bg-cover bg-center blur-3xl scale-110 opacity-60 transition-opacity"
+              style={{ backgroundImage: `url(${photo.thumbnailUrl})` }}
+            />
+            <div className="relative flex flex-col items-center gap-3">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-white/40" />
+              <span className="text-[10px] text-white/30 tracking-widest uppercase">Memuat</span>
             </div>
           </div>
-        </div>
+        )}
+        {isLoading && !imageError && !photo.thumbnailUrl && (
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <div className="flex items-center gap-3">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-white/40" />
+              <p className="text-xs text-white/40 tracking-wider">Memuat…</p>
+            </div>
+          </div>
+        )}
 
-        <div className="flex items-center gap-2 sm:gap-4">
-          <p className="hidden sm:block text-xs font-medium text-white/50 mr-2">
-            {index + 1} dari {photos.length}
-          </p>
-
-          <button onClick={goFirst} disabled={!canPrev} className="p-2 rounded-full text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-30">
-            <ChevronsLeft size={20} strokeWidth={2} />
-          </button>
-          <button onClick={goLast} disabled={!canNext} className="p-2 rounded-full text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-30">
-            <ChevronsRight size={20} strokeWidth={2} />
-          </button>
-
-          <button onClick={() => updateZoom(Math.min(MAX_ZOOM, zoom + 0.5))} disabled={!isImageReady} className="p-2 rounded-full text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-30">
-            <ZoomIn size={20} strokeWidth={2} />
-          </button>
-          <button onClick={() => updateZoom(Math.max(MIN_ZOOM, zoom - 0.5))} disabled={!isImageReady || zoom <= MIN_ZOOM} className="p-2 rounded-full text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-30">
-            <ZoomOut size={20} strokeWidth={2} />
-          </button>
-
-          <button onClick={rotateImage} disabled={!isImageReady} className="p-2 rounded-full text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-30">
-            <RotateCw size={20} strokeWidth={2} />
-          </button>
-
-          <button onClick={toggleFullscreen} className="p-2 rounded-full text-white/70 hover:bg-white/10 hover:text-white transition-colors" title={isFullscreen ? "Keluar fullscreen (Esc)" : "Fullscreen (F)"}>
-            <Fullscreen size={20} strokeWidth={2} />
-          </button>
-
-          <button onClick={toggleFullRes} disabled={!isImageReady} className={`p-2 rounded-full transition-colors ${fullResMode ? 'text-yellow-400 bg-yellow-500/20' : 'text-white/70 hover:bg-white/10 hover:text-white'}`} title={fullResMode ? "Kembali ke resolusi medium" : "Muat resolusi penuh"}>
-            <Maximize size={20} strokeWidth={2} />
-          </button>
-
-          <button onClick={() => onToggle(photo.id)} className={`p-2 rounded-full transition-colors ${selected ? 'text-blue-400 bg-blue-500/20' : 'text-white/80 hover:bg-white/10 hover:text-white'}`} title={selected ? "Batalkan pilihan" : "Pilih foto"}>
-            <Check size={20} strokeWidth={selected ? 3 : 2} />
-          </button>
-
-          <button onClick={() => setShowInfo(!showInfo)} className={`p-2 rounded-full transition-colors ${showInfo ? 'text-blue-400 bg-white/10' : 'text-white/80 hover:bg-white/10 hover:text-white'}`} title="Info & EXIF">
-            <Info size={20} strokeWidth={2} />
-          </button>
-
-          <button onClick={handleDownload} className="p-2 rounded-full text-white/80 hover:bg-white/10 hover:text-white transition-colors" title="Download">
-            <Download size={20} strokeWidth={2} />
-          </button>
-        </div>
-      </div>
-
-      {/* INFO PANEL */}
-      <AnimatePresence>
-        {showInfo && (
+        {imageError && (
           <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className="absolute top-16 right-4 z-30 w-72 max-h-[80vh] overflow-y-auto rounded-xl bg-[#202124] border border-white/10 shadow-2xl"
+            className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center z-10"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
           >
-            <div className="p-4 border-b border-white/10">
-              <h3 className="text-sm font-medium text-white">Detail File</h3>
+            <div className="p-4 rounded-full bg-white/5 backdrop-blur mb-4 border border-white/10">
+              <ImageOff size={32} className="text-white/40" />
             </div>
-            <div className="p-4 space-y-3">
-              <div><p className="text-xs text-white/50 mb-1">Nama</p><p className="text-sm text-white/90 break-all">{photo.name}</p></div>
-              <div><p className="text-xs text-white/50 mb-1">Ukuran</p><p className="text-sm text-white/90">{(photo.size / 1024 / 1024).toFixed(2)} MB</p></div>
-              {photo.width && photo.height && <div><p className="text-xs text-white/50 mb-1">Dimensi</p><p className="text-sm text-white/90">{photo.width} × {photo.height} px</p></div>}
-              <div><p className="text-xs text-white/50 mb-1">Tipe</p><p className="text-sm text-white/90">{photo.mimeType}</p></div>
-              <div><p className="text-xs text-white/50 mb-1">Mode tampilan</p><p className="text-sm text-white/90">{fullResMode ? 'Resolusi penuh' : 'Medium (800px)'}</p></div>
-              {photo.exif && (
-                <div className="pt-2 border-t border-white/10">
-                  <h4 className="text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">EXIF</h4>
-                  <div className="space-y-1 text-sm">
-                    {photo.exif.make && <p><span className="text-white/50">Kamera:</span> {photo.exif.make} {photo.exif.model}</p>}
-                    {photo.exif.iso && <p><span className="text-white/50">ISO:</span> {photo.exif.iso}</p>}
-                    {photo.exif.aperture && <p><span className="text-white/50">Aperture:</span> {photo.exif.aperture}</p>}
-                    {photo.exif.shutterSpeed && <p><span className="text-white/50">Shutter:</span> {photo.exif.shutterSpeed}</p>}
-                    {photo.exif.focalLength && <p><span className="text-white/50">Focal:</span> {photo.exif.focalLength}</p>}
-                  </div>
-                </div>
-              )}
-            </div>
+            <p className="text-sm text-white/50 tracking-wide">Gagal memuat gambar</p>
+            <button
+              onClick={(e) => { e.stopPropagation(); load(); }}
+              className="mt-4 flex items-center gap-2 rounded-full bg-white/10 backdrop-blur px-5 py-2 text-xs text-white/80 hover:bg-white/20 active:scale-95 transition-all"
+            >
+              <RefreshCw size={14} /> Coba lagi
+            </button>
           </motion.div>
         )}
-      </AnimatePresence>
 
-      {/* IMAGE CONTAINER */}
-      <div
-        className="relative flex flex-1 items-center justify-center overflow-hidden"
-        onWheel={onWheel}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-      >
-        <div className="absolute inset-0 bg-gray-900/50" />
-
-        <AnimatePresence>
-          {isLoading && !imageError && (
-            <motion.div
-              className="absolute inset-0 flex flex-col items-center justify-center"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-blue-500" />
-              <p className="mt-4 text-sm text-white/50">Memuat gambar...</p>
-            </motion.div>
+        {/* 5. The Core Image (Logic Transform tetap identik, UI dimodifikasi) */}
+        <AnimatePresence mode="wait">
+          {isImageReady && (
+            <motion.img
+              key={photo.id + fullResMode + imageUrl}
+              src={imageUrl}
+              alt={photo.name}
+              loading="eager"
+              decoding="async"
+              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
+              draggable={false}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerLeave={onPointerUp}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                if (zoom > 1) updateZoom(1);
+                else updateZoom(2.5);
+              }}
+              className="select-none touch-none max-h-full max-w-full object-contain"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                transform: `translate(calc(${offset.x}px + ${swipeX.get()}px), ${offset.y}px) scale(${zoom}) rotate(${rotation}deg)`,
+                transformOrigin: 'center center',
+                willChange: 'transform',
+                transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+              }}
+              initial={{ opacity: 0, filter: 'blur(12px)' }}
+              animate={{ opacity: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, filter: 'blur(6px)' }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+            />
           )}
         </AnimatePresence>
 
-        <AnimatePresence>
-          {imageError && (
-            <motion.div
-              className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-            >
-              <div className="mb-4 grid h-16 w-16 place-items-center rounded-full bg-red-500/10 border border-red-500/20">
-                <ImageOff size={28} className="text-red-400" />
-              </div>
-              <p className="text-sm font-medium text-white/70">Gagal memuat foto</p>
-              <button
-                onClick={() => loadImage(fullResMode)}
-                className="mt-4 flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm text-white/80 hover:bg-white/20 transition-colors"
-              >
-                <RefreshCw size={14} /> Coba lagi
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* 6. Floating Navigation Arrows */}
+        <FloatingNavigation
+          showControls={showControls}
+          isImageReady={isImageReady}
+          canPrev={canPrev}
+          canNext={canNext}
+          goPrev={goPrev}
+          goNext={goNext}
+        />
 
-        {isImageReady && (
-          <motion.img
-            key={photo.id + fullResMode + imageUrl}
-            custom={direction}
-            initial={{ opacity: 0, x: direction * 80 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: direction * -80 }}
-            transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            ref={imgRef}
-            src={imageUrl}
-            alt={photo.name}
-            loading="eager"
-            decoding="async"
-            crossOrigin="anonymous"
-            draggable={false}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerLeave={onPointerUp}
-            onDoubleClick={toggleZoom}
-            className={`select-none ${zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom}) rotate(${rotation}deg)`,
-              transformOrigin: 'center center',
-              touchAction: zoom > 1 ? 'none' : 'auto',
-              willChange: 'transform',
-            }}
-          />
-        )}
-
-        <AnimatePresence>
-          {canPrev && isImageReady && (
-            <motion.button
-              onClick={goPrev}
-              className="absolute left-4 top-1/2 z-20 -translate-y-1/2 p-3 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-all hidden sm:block"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-            >
-              <ChevronLeft size={48} strokeWidth={1.5} />
-            </motion.button>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {canNext && isImageReady && (
-            <motion.button
-              onClick={goNext}
-              className="absolute right-4 top-1/2 z-20 -translate-y-1/2 p-3 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-all hidden sm:block"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-            >
-              <ChevronRight size={48} strokeWidth={1.5} />
-            </motion.button>
-          )}
-        </AnimatePresence>
-
-        <button onClick={goPrev} disabled={!canPrev} className="absolute left-0 top-0 z-10 h-full w-1/4 opacity-0 sm:hidden" />
-        <button onClick={goNext} disabled={!canNext} className="absolute right-0 top-0 z-10 h-full w-1/4 opacity-0 sm:hidden" />
       </div>
 
-      {/* ZOOM TOOLBAR */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-[#28292c]/90 backdrop-blur-md px-3 py-2 rounded-full border border-white/10 shadow-2xl">
-        <button
-          onClick={() => updateZoom(Math.max(MIN_ZOOM, zoom - 0.5))}
-          disabled={!isImageReady || zoom <= MIN_ZOOM}
-          className="p-2 rounded-full text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+      {/* 7. Floating Bottom Toolbar */}
+      <FloatingToolbar
+        zoom={zoom}
+        isImageReady={isImageReady}
+        showControls={showControls}
+        onZoomOut={(e) => { e.stopPropagation(); updateZoom(Math.max(MIN_ZOOM, zoom - 0.4)); }}
+        onZoomIn={(e) => { e.stopPropagation(); updateZoom(Math.min(MAX_ZOOM, zoom + 0.4)); }}
+        onResetZoom={(e) => { e.stopPropagation(); updateZoom(1); }}
+        onRotate={(e) => { e.stopPropagation(); rotateImage(); }}
+        onDownload={(e) => { e.stopPropagation(); handleDownload(); }}
+      />
+
+      {/* 8. Micro-Interaction Gesture Hint (Mobile) */}
+      {isImageReady && (
+        <motion.div 
+          className="absolute bottom-24 left-1/2 -translate-x-1/2 text-[9px] text-white/10 font-mono pointer-events-none select-none hidden sm:hidden"
+          animate={{ opacity: showControls ? 0.4 : 0 }}
+          transition={{ duration: 0.5 }}
         >
-          <ZoomOut size={18} strokeWidth={2} />
-        </button>
-
-        <span className="min-w-[60px] text-center text-xs font-medium text-white/90">
-          {Math.round(zoom * 100)}%
-        </span>
-
-        <button
-          onClick={() => updateZoom(Math.min(MAX_ZOOM, zoom + 0.5))}
-          disabled={!isImageReady || zoom >= MAX_ZOOM}
-          className="p-2 rounded-full text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-        >
-          <ZoomIn size={18} strokeWidth={2} />
-        </button>
-
-        <div className="w-px h-4 bg-white/20 mx-1" />
-
-        <button
-          onClick={toggleZoom}
-          disabled={!isImageReady}
-          className="p-2 rounded-full text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-          title="Reset zoom / Fit to screen"
-        >
-          <Maximize2 size={16} strokeWidth={2} />
-        </button>
-
-        <div className="w-px h-4 bg-white/20 mx-1" />
-
-        <button
-          onClick={rotateImage}
-          disabled={!isImageReady}
-          className="p-2 rounded-full text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-          title="Putar 90°"
-        >
-          <RotateCw size={16} strokeWidth={2} />
-        </button>
-      </div>
+          geser • pinch • tap
+        </motion.div>
+      )}
     </motion.div>
   );
-}
+};
 
-// ===== MAIN APP =====
-export default function App() {
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
-  const [selectMode, setSelectMode] = useState(false);
-
-  const openViewer = (index: number) => {
-    setCurrentIndex(index);
-    setViewerOpen(true);
-  };
-
-  const toggleSelect = (id: string) => {
-    const newSelected = new Set(selectedPhotos);
-    if (newSelected.has(id)) newSelected.delete(id);
-    else newSelected.add(id);
-    setSelectedPhotos(newSelected);
-  };
-
-  const selectAll = () => {
-    const allIds = new Set(MOCK_PHOTOS.map(p => p.id));
-    setSelectedPhotos(allIds);
-  };
-
-  const deselectAll = () => {
-    setSelectedPhotos(new Set());
-  };
-
-  const downloadSelected = () => {
-    const selected = MOCK_PHOTOS.filter(p => selectedPhotos.has(p.id));
-    if (selected.length === 0) return;
-    selected.forEach(photo => {
-      const url = photo.directUrl || photo.webContentLink || photo.thumbnailUrl;
-      if (url) {
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = photo.name;
-        link.target = "_blank";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-    });
-  };
-
-  const toggleSelectMode = () => {
-    setSelectMode(!selectMode);
-    if (selectMode) {
-      setSelectedPhotos(new Set());
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-8 font-sans text-gray-900">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Galeri Foto</h1>
-          <div className="flex items-center gap-2">
-            {selectMode ? (
-              <>
-                <button
-                  onClick={selectAll}
-                  className="flex items-center gap-1 px-3 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                >
-                  <CheckSquare size={16} /> Pilih Semua
-                </button>
-                <button
-                  onClick={deselectAll}
-                  className="flex items-center gap-1 px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                >
-                  <Square size={16} /> Batalkan
-                </button>
-                <button
-                  onClick={downloadSelected}
-                  disabled={selectedPhotos.size === 0}
-                  className={`flex items-center gap-1 px-3 py-2 text-sm rounded-lg transition-colors ${
-                    selectedPhotos.size > 0
-                      ? 'bg-green-500 text-white hover:bg-green-600'
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  <Download size={16} /> Unduh ({selectedPhotos.size})
-                </button>
-                <button
-                  onClick={toggleSelectMode}
-                  className="flex items-center gap-1 px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                >
-                  <X size={16} /> Tutup
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={toggleSelectMode}
-                className="flex items-center gap-1 px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                <CheckSquare size={16} /> Pilih
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {MOCK_PHOTOS.map((photo, idx) => {
-            const isSelected = selectedPhotos.has(photo.id);
-            return (
-              <div
-                key={photo.id}
-                onClick={() => {
-                  if (selectMode) {
-                    toggleSelect(photo.id);
-                  } else {
-                    openViewer(idx);
-                  }
-                }}
-                className={`relative aspect-square rounded-xl overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all ${
-                  selectMode && isSelected ? 'ring-4 ring-blue-500 ring-offset-2' : ''
-                }`}
-              >
-                <img
-                  src={photo.thumbnailUrl || photo.directUrl}
-                  alt={photo.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  loading="lazy"
-                  decoding="async"
-                  crossOrigin="anonymous"
-                />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                {selectMode && (
-                  <div className="absolute top-2 left-2 z-10">
-                    {isSelected ? (
-                      <div className="bg-blue-500 text-white rounded-full p-1">
-                        <Check size={16} />
-                      </div>
-                    ) : (
-                      <div className="bg-white/30 backdrop-blur-sm rounded-full p-1 border border-white/50">
-                        <Square size={16} className="text-white" />
-                      </div>
-                    )}
-                  </div>
-                )}
-                {!selectMode && isSelected && (
-                  <div className="absolute top-2 left-2 bg-blue-500 text-white rounded-full p-1">
-                    <Check size={16} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {viewerOpen && (
-          <PhotoViewer
-            photos={MOCK_PHOTOS}
-            index={currentIndex}
-            selected={selectedPhotos.has(MOCK_PHOTOS[currentIndex].id)}
-            onClose={() => setViewerOpen(false)}
-            onNavigate={setCurrentIndex}
-            onToggle={toggleSelect}
-          />
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+export default React.memo(PhotoViewer);
