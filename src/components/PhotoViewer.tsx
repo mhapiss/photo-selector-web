@@ -85,20 +85,32 @@ function useImageLoader(photo: PhotoFile | undefined, fullRes: boolean) {
       const base = p.directUrl || '';
       const thumb = p.thumbnailUrl || '';
 
-      // --- PERUBAHAN PENTING DI SINI (URUTAN PROXY DI PRIORITASKAN) ---
-      // Pindahkan pengecekan Google Drive ke ATAS agar proxy dicoba terlebih dahulu
+      // ================================================================
+      // ✅ BAGIAN INI SUDAH DIPERBAIKI UNTUK VERCEL
+      // ================================================================
       if (base.includes('drive.google.com')) {
         const fileId = extractGoogleDriveId(base);
         if (fileId) {
-          const baseUrl = import.meta.env.DEV ? '/api/gdrive' : 'https://drive.google.com';
-          if (full) {
-            urls.push(`${baseUrl}/thumbnail?id=${fileId}&sz=s0`);
+          if (import.meta.env.DEV) {
+            // Mode Development (localhost): pakai proxy Vite
+            const baseUrl = '/api/gdrive';
+            if (full) {
+              urls.push(`${baseUrl}/thumbnail?id=${fileId}&sz=s0`);
+            } else {
+              urls.push(`${baseUrl}/thumbnail?id=${fileId}&sz=w1600`);
+            }
           } else {
-            urls.push(`${baseUrl}/thumbnail?id=${fileId}&sz=w1600`);
+            // Mode Production (Vercel): pakai wsrv.nl yang handle CORS
+            const baseUrl = 'https://wsrv.nl/?url=https://drive.google.com';
+            if (full) {
+              urls.push(`${baseUrl}/thumbnail?id=${fileId}&sz=s0`);
+            } else {
+              urls.push(`${baseUrl}/thumbnail?id=${fileId}&sz=w1600`);
+            }
           }
         }
       }
-      // -------------------------------------------------------------
+      // ================================================================
 
       // LOGIKA URL ASLI TETAP SAMA PERSIS (tidak diubah)
       if (full) {
