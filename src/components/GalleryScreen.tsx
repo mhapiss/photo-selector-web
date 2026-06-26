@@ -281,20 +281,18 @@ export function GalleryScreen({
         {selectedIds.size > 0 && (
           <motion.div
             layout
-            initial={{ y: 40, opacity: 0, scale: 0.9 }}
+            initial={{ y: 40, opacity: 0, scale: 0.95 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 40, opacity: 0, scale: 0.9 }}
+            exit={{ y: 40, opacity: 0, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-30 max-w-[90vw]"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-30 w-full max-w-[90vw] sm:max-w-md pointer-events-auto"
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 8px)' }}
           >
-            <div className="backdrop-blur-3xl bg-[#ffffff]/[0.04] border border-white/10 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.8)] px-2 py-1.5">
-              <SelectionBar
-                count={selectedIds.size}
-                onReview={handleSend}
-                onClear={handleClearAll}
-              />
-            </div>
+            <SelectionBar
+              count={selectedIds.size}
+              onReview={handleSend}
+              onClear={handleClearAll}
+            />
           </motion.div>
         )}
       </AnimatePresence>

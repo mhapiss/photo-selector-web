@@ -66,6 +66,8 @@ export function Gallery({
     return map;
   }, [photos]);
 
+  const { containerRef: responsiveContainerRef, columnCount: responsiveColumnCount } = useResponsiveColumns();
+
   const {
     containerRef: virtualContainerRef,
     totalHeight,
@@ -74,13 +76,11 @@ export function Gallery({
     columnCount,
   } = useVirtualGrid({
     itemCount: filtered.length,
-    columnCount: 3,
+    columnCount: responsiveColumnCount,
     gap: GAP,
     aspectRatio: ASPECT_RATIO,
     overscan: 8,
   });
-
-  const { containerRef: responsiveContainerRef } = useResponsiveColumns();
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {

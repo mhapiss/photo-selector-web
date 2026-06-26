@@ -82,35 +82,39 @@ function PhotoCardComponent({
   return (
     <motion.div
       layout
-      className="group relative block w-full overflow-hidden rounded-xl bg-slate-100"
+      whileHover="hover"
+      initial="initial"
+      className="group relative block w-full overflow-hidden rounded-xl bg-[#09090d] border border-white/5"
       style={{
         boxShadow: selected
-          ? '0 0 0 2px rgba(120,60,240,0.9), 0 0 0 4px rgba(120,60,240,0.15), 0 8px 24px rgba(0,0,0,0.18)'
-          : '0 1px 3px rgba(0,0,0,0.08)',
+          ? '0 0 0 2px rgba(139,92,246,0.9), 0 0 0 4px rgba(139,92,246,0.15), 0 8px 24px rgba(0,0,0,0.5)'
+          : '0 4px 12px rgba(0,0,0,0.15)',
       }}
       animate={{
         boxShadow: selected
-          ? '0 0 0 2px rgba(120,60,240,0.9), 0 0 0 4px rgba(120,60,240,0.15), 0 8px 24px rgba(0,0,0,0.18)'
-          : '0 1px 3px rgba(0,0,0,0.08)',
+          ? '0 0 0 2px rgba(139,92,246,0.9), 0 0 0 4px rgba(139,92,246,0.15), 0 8px 24px rgba(0,0,0,0.5)'
+          : '0 4px 12px rgba(0,0,0,0.15)',
         scale: 1,
       }}
-      whileHover={{
-        scale: 1.02,
-        boxShadow: selected
-          ? '0 0 0 2px rgba(120,60,240,0.9), 0 0 0 4px rgba(120,60,240,0.2), 0 16px 40px rgba(0,0,0,0.22)'
-          : '0 4px 20px rgba(0,0,0,0.14)',
-        transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
-      }}
-      whileTap={{ scale: 0.97, transition: { duration: 0.1 } }}
+      whileTap={{ scale: 0.98, transition: { duration: 0.1 } }}
       transition={{ layout: { duration: 0.3, ease: [0.16, 1, 0.3, 1] } }}
+      variants={{
+        hover: {
+          scale: 1.015,
+          boxShadow: selected
+            ? '0 0 0 2px rgba(139,92,246,0.9), 0 0 0 4px rgba(139,92,246,0.22), 0 16px 40px rgba(0,0,0,0.6)'
+            : '0 12px 32px rgba(0,0,0,0.3)',
+          transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] }
+        }
+      }}
     >
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`Open photo ${photo.name}`}
-        className="block w-full text-left"
+        aria-label={`Buka foto ${photo.name}`}
+        className="block w-full text-left focus:outline-none"
       >
-        <div className="relative aspect-square overflow-hidden bg-slate-100">
+        <div className="relative aspect-square overflow-hidden bg-[#0a0a0f]">
           {!showFallback ? (
             <>
               <div
@@ -124,15 +128,15 @@ function PhotoCardComponent({
                 alt={photo.name}
                 loading="lazy"
                 decoding="async"
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover will-change-[opacity,transform] transition-opacity duration-300"
                 onLoad={() => setIsLoaded(true)}
                 onError={handleImageError}
                 key={`${photo.id}-${urlIndex}`}
               />
 
               {!isLoaded && !hasError && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-transparent" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/10 backdrop-blur-sm">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
                 </div>
               )}
             </>
@@ -140,13 +144,13 @@ function PhotoCardComponent({
             <div
               className={`relative grid aspect-square place-items-center bg-gradient-to-br ${phase}`}
             >
-              <div className="flex flex-col items-center gap-2 text-center">
+              <div className="flex flex-col items-center gap-2 text-center p-3">
                 <FileImage
-                  size={28}
-                  className="text-slate-400/70"
+                  size={24}
+                  className="text-white/20"
                   strokeWidth={1.5}
                 />
-                <span className="px-3 text-[10px] font-medium text-slate-500/80">
+                <span className="px-2 text-[10px] font-medium text-white/30">
                   {urlIndex >= thumbnailUrls.length - 1 ? 'Gagal muat' : 'Preview tidak tersedia'}
                 </span>
                 {urlIndex >= thumbnailUrls.length - 1 && (
@@ -157,9 +161,9 @@ function PhotoCardComponent({
                       setHasError(false);
                       setIsLoaded(false);
                     }}
-                    className="mt-1 rounded-full bg-slate-200/50 p-1.5 hover:bg-slate-200/70"
+                    className="mt-1 rounded-full bg-white/5 p-1.5 hover:bg-white/10 transition-colors"
                   >
-                    <RefreshCw size={12} className="text-slate-600" />
+                    <RefreshCw size={10} className="text-white/50" />
                   </button>
                 )}
               </div>
@@ -171,18 +175,18 @@ function PhotoCardComponent({
       <motion.span
         className="pointer-events-none absolute inset-0"
         animate={{
-          background: selected ? 'rgba(100,40,200,0.12)' : 'rgba(0,0,0,0)',
+          background: selected ? 'rgba(139,92,246,0.08)' : 'rgba(0,0,0,0)',
         }}
         transition={{ duration: 0.25 }}
       />
 
-      <span className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-200 group-hover:bg-black/10" />
+      <span className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-200 group-hover:bg-black/5" />
 
       <div
-        className="pointer-events-none absolute bottom-0 left-0 right-0 truncate px-2 pb-2 pt-6 text-left text-[10px] font-medium text-white/95 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+        className="pointer-events-none absolute bottom-0 left-0 right-0 truncate px-3 pb-2 pt-6 text-left text-[10px] font-medium text-white/80 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
         style={{
           background:
-            'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%)',
+            'linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 100%)',
         }}
       >
         {photo.name}
@@ -192,8 +196,8 @@ function PhotoCardComponent({
         type="button"
         onClick={handleToggle}
         aria-pressed={selected}
-        aria-label={selected ? `Deselect ${photo.name}` : `Select ${photo.name}`}
-        className="absolute right-2 top-2 z-10"
+        aria-label={selected ? `Batal pilih ${photo.name}` : `Pilih ${photo.name}`}
+        className="absolute right-2.5 top-2.5 z-10 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-black/50 rounded-full"
         style={{ WebkitTapHighlightColor: 'transparent' }}
       >
         <AnimatePresence mode="wait" initial={false}>
@@ -205,9 +209,9 @@ function PhotoCardComponent({
                 width: 28,
                 height: 28,
                 background:
-                  'linear-gradient(135deg, rgba(140,60,240,0.95) 0%, rgba(80,120,240,0.95) 100%)',
+                  'linear-gradient(135deg, rgba(147,51,234,0.95) 0%, rgba(79,70,229,0.95) 100%)',
                 boxShadow:
-                  '0 2px 12px rgba(120,40,200,0.5), inset 0 1px 0 rgba(255,255,255,0.2)',
+                  '0 2px 12px rgba(139,92,246,0.5), inset 0 1px 0 rgba(255,255,255,0.2)',
               }}
               initial={{ scale: 0, opacity: 0, rotate: -20 }}
               animate={{ scale: 1, opacity: 1, rotate: 0 }}
@@ -225,21 +229,22 @@ function PhotoCardComponent({
           ) : (
             <motion.span
               key="unselected"
-              className="grid place-items-center rounded-full opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+              className="grid place-items-center rounded-full opacity-0 sm:opacity-0"
               style={{
                 width: 28,
                 height: 28,
-                border: '1.5px solid rgba(255,255,255,0.6)',
-                background: 'rgba(0,0,0,0.25)',
+                border: '1.5px solid rgba(255,255,255,0.4)',
+                background: 'rgba(0,0,0,0.3)',
                 backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
               }}
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 0 }}
-              exit={{ scale: 0.8, opacity: 0 }}
+              variants={{
+                initial: { scale: 0.8, opacity: 0 },
+                hover: { scale: 1, opacity: 1 },
+              }}
               transition={{ duration: 0.15 }}
-              whileHover={{ opacity: 1 }}
             >
-              <Check size={14} strokeWidth={3} className="text-white/80" />
+              <Check size={14} strokeWidth={3} className="text-white/70" />
             </motion.span>
           )}
         </AnimatePresence>
@@ -251,7 +256,7 @@ function PhotoCardComponent({
             className="pointer-events-none absolute inset-0 rounded-xl"
             style={{
               background:
-                'linear-gradient(135deg, rgba(160,100,255,0.08) 0%, rgba(80,120,255,0.05) 50%, rgba(60,180,220,0.08) 100%)',
+                'linear-gradient(135deg, rgba(139,92,246,0.06) 0%, rgba(99,102,241,0.04) 50%, rgba(6,182,212,0.06) 100%)',
             }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

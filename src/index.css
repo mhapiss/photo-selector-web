@@ -15,7 +15,7 @@
   }
 
   body {
-    @apply bg-background text-ink font-sans antialiased;
+    @apply bg-[#020204] text-white/90 font-sans antialiased;
     margin: 0;
     min-height: 100dvh;
     text-rendering: optimizeLegibility;
@@ -24,14 +24,14 @@
   }
 
   ::selection {
-    background: rgba(37, 99, 235, 0.18);
-    color: #0F172A;
+    background: rgba(139, 92, 246, 0.25);
+    color: #ffffff;
   }
 }
 
 @layer components {
   .skeleton {
-    @apply bg-slate-200/70 relative overflow-hidden rounded-lg;
+    @apply bg-white/[0.03] relative overflow-hidden rounded-lg;
   }
 
   .skeleton::after {
@@ -42,14 +42,14 @@
     background: linear-gradient(
       90deg,
       transparent,
-      rgba(255, 255, 255, 0.55),
+      rgba(255, 255, 255, 0.08),
       transparent
     );
     animation: shimmer 1.5s infinite;
   }
 
   .glass {
-    background: rgba(255, 255, 255, 0.72);
+    background: rgba(10, 10, 15, 0.75);
     backdrop-filter: saturate(180%) blur(20px);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
   }

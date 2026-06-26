@@ -31,63 +31,47 @@ export function useVirtualGrid({
 
   useEffect(() => {
     let rafId = 0;
+    let ticking = false;
 
-    const init = () => {
-      const el = containerRef.current;
+    const el = containerRef.current;
+    if (!el) return;
 
-      if (!el) {
-        rafId = requestAnimationFrame(init);
-        return;
-      }
-
-      let ticking = false;
-
-      const updateSize = () => {
-        setViewportHeight(el.clientHeight);
-        setContainerWidth(el.clientWidth);
-      };
-
-      const handleScroll = () => {
-        if (ticking) return;
-
-        ticking = true;
-
-        requestAnimationFrame(() => {
-          setScrollTop(el.scrollTop);
-          ticking = false;
-        });
-      };
-
-      updateSize();
-
-      const ro = new ResizeObserver(updateSize);
-
-      ro.observe(el);
-
-      el.addEventListener(
-        'scroll',
-        handleScroll,
-        { passive: true }
-      );
-
-      return () => {
-        ro.disconnect();
-
-        el.removeEventListener(
-          'scroll',
-          handleScroll
-        );
-      };
+    const updateSize = () => {
+      setContainerWidth(el.clientWidth);
     };
 
-    const cleanup = init();
+    const handleScroll = () => {
+      if (ticking) return;
+      ticking = true;
+
+      rafId = requestAnimationFrame(() => {
+        const currentEl = containerRef.current;
+        if (currentEl) {
+          const rect = currentEl.getBoundingClientRect();
+          const offsetTop = rect.top + window.scrollY;
+          const relativeScroll = Math.max(0, window.scrollY - offsetTop);
+          setScrollTop(relativeScroll);
+          setViewportHeight(window.innerHeight);
+        }
+        ticking = false;
+      });
+    };
+
+    updateSize();
+    const ro = new ResizeObserver(updateSize);
+    ro.observe(el);
+
+    // Initial run
+    handleScroll();
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll, { passive: true });
 
     return () => {
+      ro.disconnect();
       cancelAnimationFrame(rafId);
-
-      if (typeof cleanup === 'function') {
-        cleanup();
-      }
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
     };
   }, []);
 

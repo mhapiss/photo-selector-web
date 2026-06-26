@@ -1,18 +1,21 @@
+export type Step = 'entry' | 'gallery' | 'summary' | 'done';
+
 export type PhotoFile = {
   id: string;
   name: string;
-  mimeType: string;
+  mimeType?: string;
   thumbnailUrl: string;
   directUrl: string; // URL untuk akses langsung ke file
-  webContentLink: string;
-  size: number;
+  webContentLink?: string;
+  size?: number;
   _raw?: any; // Optional untuk debugging
 };
 
 export type AlbumMeta = {
   folderId: string;
   eventName: string;
-  // tambahan field lain sesuai kebutuhan
+  clientName: string;
+  folderLink: string;
 };
 
 export type LoadState = 'idle' | 'loading' | 'success' | 'error';

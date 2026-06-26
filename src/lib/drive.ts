@@ -114,18 +114,15 @@ export function mapDriveFiles(
     .map((file) => ({
       id: file.id,
       name: file.name ?? file.id,
-
-      // 250px thumbnail for gallery
+      mimeType: file.mimeType || 'image/jpeg',
       thumbnailUrl: driveThumbUrl(
         file.id,
         250
       ),
-
       directUrl: driveFileUrl(
         file.id
       ),
-
-      sizeBytes: file.size
+      size: file.size
         ? Number(file.size)
         : undefined,
     }));
