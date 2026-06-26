@@ -52,77 +52,43 @@ const SWIPE_THRESHOLD = 70;
 const DOUBLE_TAP_MS = 280;
 
 // ===== UTILS =====
-/**
- * Extract a Google Drive file ID from any known URL format:
- *  - /file/d/{id}/view
- *  - /thumbnail?id={id}&...
- *  - ?id={id} / &id={id}
- *  - raw 28-char IDs
- */
 function extractDriveFileId(url: string): string | null {
   if (!url) return null;
-  // /file/d/{id}/...  or  /d/{id}
   let m = url.match(/\/(?:file\/)?d\/([A-Za-z0-9_-]{20,})/);
   if (m) return m[1];
-  // ?id= or &id=
   m = url.match(/[?&]id=([A-Za-z0-9_-]{20,})/);
   if (m) return m[1];
   return null;
 }
 
-/**
- * Build a prioritized list of image URLs to try for a given photo.
- *
- * Strategy (in order):
- *  1. Drive thumbnail at w1600 (large preview – works cross-origin)
- *  2. Drive thumbnail at w800  (medium preview)
- *  3. lh3.googleusercontent.com direct link (when available)
- *  4. webContentLink (if present)
- *  5. directUrl as-is (last resort)
- *
- * Full-res mode swaps the first two entries for sz=s0 (original size).
- */
 function buildImageUrls(photo: PhotoFile, fullRes: boolean): string[] {
   const urls: string[] = [];
-
-  // Always try to get a file ID from any available URL
   const id =
     photo.id ||
     extractDriveFileId(photo.directUrl || '') ||
     extractDriveFileId(photo.thumbnailUrl || '');
-
   if (id) {
     if (fullRes) {
-      // sz=s0 → original resolution
       urls.push(`https://drive.google.com/thumbnail?id=${id}&sz=s0`);
       urls.push(driveLargeUrl(id));
       urls.push(driveMediumUrl(id));
     } else {
-      urls.push(driveLargeUrl(id));      // w1600
-      urls.push(driveMediumUrl(id));     // w1000
-      urls.push(driveThumbUrl(id, 800)); // w800
+      urls.push(driveLargeUrl(id));
+      urls.push(driveMediumUrl(id));
+      urls.push(driveThumbUrl(id, 800));
     }
-    // lh3 direct link (sometimes works without cookies)
     urls.push(`https://lh3.googleusercontent.com/d/${id}=s1600`);
     urls.push(`https://lh3.googleusercontent.com/d/${id}=s0`);
   }
-
-  // Use existing thumbnailUrl if it looks like a working URL
   if (photo.thumbnailUrl && !photo.thumbnailUrl.includes('/file/d/')) {
     urls.push(photo.thumbnailUrl);
   }
-
-  // webContentLink (Drive direct download link)
   if (photo.webContentLink) {
     urls.push(photo.webContentLink);
   }
-
-  // directUrl as absolute last resort (it's a viewer page, not an image)
   if (photo.directUrl && !photo.directUrl.includes('/file/d/')) {
     urls.push(photo.directUrl);
   }
-
-  // Deduplicate while preserving order
   return [...new Set(urls.filter(Boolean))];
 }
 
@@ -160,7 +126,6 @@ function useImageLoader(photo: PhotoFile | undefined, fullRes: boolean) {
         if (!cancelled) tryNext();
       };
       img.src = url;
-      // 8 second timeout per attempt
       setTimeout(() => {
         if (!cancelled && !img.complete) {
           img.onload = null;
@@ -256,93 +221,102 @@ const BackgroundLayer: React.FC<{ darken: boolean }> = React.memo(({ darken }) =
   </div>
 ));
 
-const FloatingHeader: React.FC<{
-  photo: PhotoFile;
-  index: number;
-  total: number;
-  selected: boolean;
-  selectionIndex?: number | null;
+// ── NEW: Close button (top‑left, always visible) ──
+const CloseButton: React.FC<{ onClose: () => void }> = React.memo(({ onClose }) => (
+  <motion.button
+    className="absolute top-0 left-0 z-40 p-4"
+    style={{
+      paddingTop: 'max(env(safe-area-inset-top), 16px)',
+      paddingLeft: 'max(env(safe-area-inset-left), 16px)',
+    }}
+    onClick={onClose}
+    aria-label="Close viewer"
+    initial={{ opacity: 0, scale: 0.8 }}
+    animate={{ opacity: 1, scale: 1 }}
+    exit={{ opacity: 0, scale: 0.8 }}
+    whileHover={{ scale: 1.1 }}
+    whileTap={{ scale: 0.9 }}
+    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+  >
+    <div
+      className="w-11 h-11 rounded-full flex items-center justify-center border border-white/20 shadow-lg"
+      style={{
+        background: 'rgba(0,0,0,0.5)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+      }}
+    >
+      <X size={22} strokeWidth={2.5} className="text-white" />
+    </div>
+  </motion.button>
+));
+
+// ── NEW: Glass button for top‑right actions ──
+const GlassButton: React.FC<{
+  onClick: (e: React.MouseEvent) => void;
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+}> = React.memo(({ onClick, icon, label, active, disabled }) => (
+  <motion.button
+    onClick={onClick}
+    disabled={disabled}
+    className={`w-10 h-10 rounded-full flex items-center justify-center border border-white/20 transition-colors ${
+      active ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10'
+    } disabled:opacity-30`}
+    style={{
+      background: active ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.3)',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+    }}
+    whileHover={{ scale: 1.1 }}
+    whileTap={{ scale: 0.9 }}
+    aria-label={label}
+  >
+    {icon}
+  </motion.button>
+));
+
+// ── NEW: Top‑right actions (full‑res & fullscreen), auto‑hide with controls ──
+const TopRightActions: React.FC<{
+  showControls: boolean;
   fullResMode: boolean;
   isImageReady: boolean;
-  showControls: boolean;
-  onClose: (e: React.MouseEvent) => void;
   onToggleFullRes: (e: React.MouseEvent) => void;
   onToggleFullscreen: (e: React.MouseEvent) => void;
-  onToggleInfo: (e: React.MouseEvent) => void;
-  onToggleSelect: (e: React.MouseEvent) => void;
-}> = React.memo(({ photo, index, total, selected, selectionIndex, fullResMode, isImageReady, showControls, onClose, onToggleFullRes, onToggleFullscreen, onToggleInfo, onToggleSelect }) => (
+}> = React.memo(({ showControls, fullResMode, isImageReady, onToggleFullRes, onToggleFullscreen }) => (
   <AnimatePresence>
     {showControls && (
       <motion.div
-        className="absolute top-4 sm:top-6 left-1/2 -translate-x-1/2 z-30 w-[calc(100%-32px)] sm:w-auto max-w-2xl"
-        initial={{ opacity: 0, y: -24 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -24 }}
+        className="absolute top-0 right-0 z-30 flex items-center gap-1 p-4"
+        style={{
+          paddingTop: 'max(env(safe-area-inset-top), 16px)',
+          paddingRight: 'max(env(safe-area-inset-right), 16px)',
+        }}
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 20 }}
         transition={{ type: 'spring', stiffness: 320, damping: 32 }}
       >
-        <div
-          className="flex items-center gap-1.5 sm:gap-3 px-3 py-2 border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)]"
-          style={{
-            background: 'rgba(255,255,255,0.04)',
-            backdropFilter: 'blur(40px)',
-            WebkitBackdropFilter: 'blur(40px)',
-          }}
-        >
-          <button
-            onClick={onClose}
-            className="p-2.5 rounded-full text-white/80 hover:bg-white/10 active:scale-90 transition-all"
-            aria-label="Tutup"
-          >
-            <ArrowLeft size={18} strokeWidth={2.5} />
-          </button>
-          <div className="flex items-center gap-2 min-w-0 flex-1 sm:flex-initial px-1">
-            <span className="text-sm font-medium text-white/90 truncate max-w-[120px] sm:max-w-[220px] tracking-tight">
-              {photo.name}
-            </span>
-            <span className="text-xs text-white/40 font-mono hidden sm:inline">{index + 1} / {total}</span>
-            {selectionIndex != null && (
-              <span className="text-[10px] text-blue-400/90 bg-blue-500/20 px-2 py-0.5 rounded-full font-mono">
-                #{selectionIndex + 1}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-0.5 sm:gap-1">
-            <button
-              onClick={onToggleFullRes}
-              disabled={!isImageReady}
-              className={`p-2.5 rounded-full transition-all active:scale-90 hidden sm:block ${fullResMode ? 'text-yellow-400 bg-yellow-500/20' : 'text-white/60 hover:bg-white/10'} disabled:opacity-30`}
-              title={fullResMode ? 'Resolusi penuh aktif' : 'Mode optimal'}
-            >
-              <Maximize2 size={17} strokeWidth={2} />
-            </button>
-            <button
-              onClick={onToggleFullscreen}
-              className="p-2.5 rounded-full text-white/60 hover:bg-white/10 active:scale-90 transition-all hidden sm:block"
-              aria-label="Fullscreen"
-            >
-              <Fullscreen size={17} strokeWidth={2} />
-            </button>
-            <button
-              onClick={onToggleInfo}
-              className="p-2.5 rounded-full text-white/60 hover:bg-white/10 active:scale-90 transition-all"
-              aria-label="Info foto"
-            >
-              <Info size={17} strokeWidth={2} />
-            </button>
-            <button
-              onClick={onToggleSelect}
-              className={`p-2.5 rounded-full transition-all active:scale-90 ${selected ? 'text-blue-400 bg-blue-500/20' : 'text-white/60 hover:bg-white/10'}`}
-              aria-label={selected ? 'Batal pilih' : 'Pilih foto'}
-            >
-              <Check size={17} strokeWidth={selected ? 3 : 2} />
-            </button>
-          </div>
-        </div>
+        <GlassButton
+          onClick={onToggleFullRes}
+          active={fullResMode}
+          icon={<Maximize2 size={17} strokeWidth={2} />}
+          label="Toggle full resolution"
+          disabled={!isImageReady}
+        />
+        <GlassButton
+          onClick={onToggleFullscreen}
+          icon={<Fullscreen size={17} strokeWidth={2} />}
+          label="Toggle fullscreen"
+        />
       </motion.div>
     )}
   </AnimatePresence>
 ));
 
+// ── Info Sheet (unchanged) ──
 const InfoSheet: React.FC<{
   photo: PhotoFile;
   fullResMode: boolean;
@@ -414,6 +388,7 @@ const InfoSheet: React.FC<{
   </AnimatePresence>
 ));
 
+// ── Bottom toolbar (now includes EXIF) ──
 const FloatingToolbar: React.FC<{
   zoom: number;
   isImageReady: boolean;
@@ -423,11 +398,15 @@ const FloatingToolbar: React.FC<{
   onResetZoom: (e: React.MouseEvent) => void;
   onRotate: (e: React.MouseEvent) => void;
   onDownload: (e: React.MouseEvent) => void;
-}> = React.memo(({ zoom, isImageReady, showControls, onZoomOut, onZoomIn, onResetZoom, onRotate, onDownload }) => (
+  onToggleInfo: (e: React.MouseEvent) => void;
+}> = React.memo(({ zoom, isImageReady, showControls, onZoomOut, onZoomIn, onResetZoom, onRotate, onDownload, onToggleInfo }) => (
   <AnimatePresence>
     {showControls && (
       <motion.div
-        className="absolute bottom-8 sm:bottom-10 left-1/2 -translate-x-1/2 z-30"
+        className="absolute left-1/2 -translate-x-1/2 z-30"
+        style={{
+          bottom: 'calc(max(env(safe-area-inset-bottom, 20px), 20px) + 80px)',
+        }}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 16 }}
@@ -453,10 +432,66 @@ const FloatingToolbar: React.FC<{
           <button onClick={onDownload} disabled={!isImageReady} className="p-2.5 rounded-full text-white/70 hover:bg-white/10 active:scale-90 transition-all disabled:opacity-30">
             <Download size={17} strokeWidth={2} />
           </button>
+          <button onClick={onToggleInfo} className="p-2.5 rounded-full text-white/70 hover:bg-white/10 active:scale-90 transition-all" aria-label="EXIF info">
+            <Info size={17} strokeWidth={2} />
+          </button>
         </div>
       </motion.div>
     )}
   </AnimatePresence>
+));
+
+// ── NEW: Select Photo CTA (always visible, centered above safe area) ──
+const SelectButton: React.FC<{
+  selected: boolean;
+  selectionIndex?: number | null;
+  onToggle: () => void;
+}> = React.memo(({ selected, selectionIndex, onToggle }) => (
+  <motion.button
+    className="absolute left-1/2 -translate-x-1/2 z-30"
+    style={{
+      bottom: 'calc(max(env(safe-area-inset-bottom, 20px), 20px) + 16px)',
+    }}
+    onClick={onToggle}
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: 20 }}
+    whileHover={{ scale: 1.02 }}
+    whileTap={{ scale: 0.96 }}
+    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+    aria-label={selected ? 'Deselect photo' : 'Select photo'}
+  >
+    <div
+      className={`flex items-center gap-2 px-6 py-3 rounded-full border text-white font-semibold shadow-lg transition-colors duration-300 ${
+        selected
+          ? 'bg-blue-500 border-blue-400'
+          : 'bg-white/10 border-white/20 hover:bg-white/20'
+      }`}
+      style={{
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        minWidth: '180px',
+        justifyContent: 'center',
+      }}
+    >
+      {selected ? (
+        <motion.span
+          key="check"
+          initial={{ scale: 0, rotate: -90 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+        >
+          <Check size={20} strokeWidth={3} />
+        </motion.span>
+      ) : (
+        <span>Select Photo</span>
+      )}
+      {selected && <span>Selected</span>}
+      {selectionIndex != null && (
+        <span className="text-xs opacity-80 ml-1">#{selectionIndex + 1}</span>
+      )}
+    </div>
+  </motion.button>
 ));
 
 // ===== MAIN COMPONENT =====
@@ -551,7 +586,7 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
     if (index < photos.length - 1) { animate(swipeX, 0, { duration: 0 }); onNavigate(index + 1); showCtrl(); }
   }, [index, onNavigate, photos.length, showCtrl, swipeX]);
 
-  // ── Non-passive wheel for zoom ──
+  // ── Non‑passive wheel for zoom ──
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -793,6 +828,11 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }, [photo]);
 
+  const handleToggleInfo = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowInfo(v => !v);
+  }, []);
+
   if (!photo) return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black">
       <p className="text-white/40 text-sm">Foto tidak tersedia</p>
@@ -820,21 +860,16 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
       {/* ── Background ── */}
       <BackgroundLayer darken={!showControls} />
 
-      {/* ── Header ── */}
-      <FloatingHeader
-        photo={photo}
-        index={index}
-        total={photos.length}
-        selected={selected}
-        selectionIndex={selectionIndex}
+      {/* ── Close button (top‑left, always visible) ── */}
+      <CloseButton onClose={onClose} />
+
+      {/* ── Top‑right actions (full‑res & fullscreen) ── */}
+      <TopRightActions
+        showControls={showControls}
         fullResMode={fullResMode}
         isImageReady={isImageReady}
-        showControls={showControls}
-        onClose={(e) => { e.stopPropagation(); onClose(); }}
         onToggleFullRes={(e) => { e.stopPropagation(); setFullResMode(v => !v); showCtrl(); }}
         onToggleFullscreen={(e) => { e.stopPropagation(); toggleFullscreen(); }}
-        onToggleInfo={(e) => { e.stopPropagation(); setShowInfo(v => !v); }}
-        onToggleSelect={(e) => { e.stopPropagation(); if (photo) onToggle(photo.id); }}
       />
 
       {/* ── Info sheet ── */}
@@ -964,7 +999,7 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
         )}
       </AnimatePresence>
 
-      {/* ── Toolbar ── */}
+      {/* ── Bottom toolbar (now includes EXIF) ── */}
       <FloatingToolbar
         zoom={zoom}
         isImageReady={isImageReady}
@@ -974,6 +1009,14 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
         onResetZoom={(e) => { e.stopPropagation(); applyZoom(1); }}
         onRotate={(e) => { e.stopPropagation(); setRotation(r => (r + 90) % 360); showCtrl(); }}
         onDownload={(e) => { e.stopPropagation(); handleDownload(); }}
+        onToggleInfo={handleToggleInfo}
+      />
+
+      {/* ── Select Photo CTA (always visible, centered above safe area) ── */}
+      <SelectButton
+        selected={selected}
+        selectionIndex={selectionIndex}
+        onToggle={() => photo && onToggle(photo.id)}
       />
     </motion.div>
   );
