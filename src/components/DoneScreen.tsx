@@ -164,7 +164,7 @@ export function DoneScreen({
             </div>
             <motion.button
               onClick={copyMessage}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold"
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-full px-4 py-1.5 text-[11px] font-semibold touch-manipulation"
               style={{
                 background: copied
                   ? 'rgba(16,185,129,0.15)'

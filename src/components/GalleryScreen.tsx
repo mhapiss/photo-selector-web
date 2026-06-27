@@ -80,33 +80,7 @@ const BackgroundLayer = React.memo(() => {
   );
 });
 
-// 2. FloatingHeader: Arc Browser / Apple Photos Style
-const FloatingHeaderWrapper = React.memo(({ 
-  children, 
-  showHeader 
-}: { 
-  children: React.ReactNode; 
-  showHeader: boolean; 
-}) => {
-  return (
-    <AnimatePresence>
-      {showHeader && (
-        <motion.div
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-20 w-[calc(100%-32px)] sm:w-auto max-w-4xl pointer-events-auto"
-          initial={{ opacity: 0, y: -30, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -30, scale: 0.95 }}
-          transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-          style={{ paddingTop: 'env(safe-area-inset-top, 8px)' }}
-        >
-          <div className="flex items-center justify-between px-4 py-2.5 bg-[#ffffff]/[0.03] backdrop-blur-3xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6)] rounded-full">
-            {children}
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-});
+
 
 // 3. OverlayManager: Darken, Blur, Scale Gallery saat Viewer terbuka
 const GallerySurface = React.memo(({ 
@@ -148,9 +122,6 @@ export function GalleryScreen({
   const [loadError, setLoadError] = useState<LoadError | null>(null);
   const [manualMode, setManualMode] = useState(false);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  const [showHeader, setShowHeader] = useState(true);
-  
-  const hideTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Stabilkan referensi onPhotosLoaded
   const onPhotosLoadedRef = useRef(onPhotosLoaded);
@@ -186,27 +157,7 @@ export function GalleryScreen({
     }
   }, [viewerIndex, photos.length]);
 
-  // === Logic Kustom: Header Auto Hide (Sama seperti Viewer, tapi diterapkan ke Header) ===
-  const resetHeaderTimeout = useCallback(() => {
-    setShowHeader(true);
-    if (hideTimeout.current) clearTimeout(hideTimeout.current);
-    hideTimeout.current = setTimeout(() => {
-      setShowHeader(false);
-    }, 3500);
-  }, []);
 
-  useEffect(() => {
-    resetHeaderTimeout();
-    window.addEventListener('mousemove', resetHeaderTimeout);
-    window.addEventListener('touchstart', resetHeaderTimeout);
-    return () => {
-      window.removeEventListener('mousemove', resetHeaderTimeout);
-      window.removeEventListener('touchstart', resetHeaderTimeout);
-      if (hideTimeout.current) clearTimeout(hideTimeout.current);
-    };
-  }, [resetHeaderTimeout]);
-
-  // === Logic yang TIDAK BERUBAH ===
   const handleManualConfirm = useCallback(
     (manualPhotos: PhotoFile[]) => {
       setPhotos(manualPhotos);
@@ -250,16 +201,14 @@ export function GalleryScreen({
       {/* 1. Layer Animasi Background */}
       <BackgroundLayer />
 
-      {/* 2. Floating Header (Glassmorphism, Arc Browser Style) */}
-      <FloatingHeaderWrapper showHeader={showHeader}>
-        <GalleryHeader
-          eventName={meta.eventName}
-          photoCount={photos.length}
-          selectedCount={selectedIds.size}
-          onBack={onBack}
-          onSend={handleSend}
-        />
-      </FloatingHeaderWrapper>
+      {/* 2. Standard Sticky Header */}
+      <GalleryHeader
+        eventName={meta.eventName}
+        photoCount={photos.length}
+        selectedCount={selectedIds.size}
+        onBack={onBack}
+        onSend={handleSend}
+      />
 
       {/* 3. Gallery Surface (Dengan Scale + Blur effect saat Viewer terbuka) */}
       <GallerySurface isViewerOpen={isViewerOpen}>

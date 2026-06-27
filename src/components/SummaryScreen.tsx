@@ -56,7 +56,7 @@ export function SummaryScreen({
           <button
             onClick={onBack}
             aria-label="Kembali ke galeri"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/5 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-white/5 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-all focus:outline-none focus:ring-2 focus:ring-violet-500 touch-manipulation"
           >
             <ChevronLeft size={20} strokeWidth={2.5} />
           </button>

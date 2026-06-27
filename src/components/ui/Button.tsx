@@ -22,9 +22,9 @@ const variantClasses: Record<Variant, string> = {
 };
 
 const sizeClasses: Record<Size, string> = {
-  sm: 'h-9 px-3.5 text-sm gap-1.5 rounded-xl',
-  md: 'h-11 px-5 text-sm gap-2 rounded-lg',
-  lg: 'h-14 px-6 text-base gap-2.5 rounded-2xl',
+  sm: 'min-h-[44px] h-[44px] px-3.5 text-sm gap-1.5 rounded-xl',
+  md: 'min-h-[44px] h-11 px-5 text-sm gap-2 rounded-lg',
+  lg: 'min-h-[56px] h-14 px-6 text-base gap-2.5 rounded-2xl',
 };
 
 export function Button({

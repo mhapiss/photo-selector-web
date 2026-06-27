@@ -128,7 +128,8 @@ function PhotoCardComponent({
                 alt={photo.name}
                 loading="lazy"
                 decoding="async"
-                className="h-full w-full object-cover will-change-[opacity,transform] transition-opacity duration-300"
+                draggable={false}
+                className="h-full w-full object-cover will-change-[opacity,transform] transition-opacity duration-300 no-drag"
                 onLoad={() => setIsLoaded(true)}
                 onError={handleImageError}
                 key={`${photo.id}-${urlIndex}`}
@@ -197,7 +198,7 @@ function PhotoCardComponent({
         onClick={handleToggle}
         aria-pressed={selected}
         aria-label={selected ? `Batal pilih ${photo.name}` : `Pilih ${photo.name}`}
-        className="absolute right-2.5 top-2.5 z-10 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-black/50 rounded-full"
+        className="absolute right-1 top-1 z-10 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-black/50 touch-manipulation"
         style={{ WebkitTapHighlightColor: 'transparent' }}
       >
         <AnimatePresence mode="wait" initial={false}>

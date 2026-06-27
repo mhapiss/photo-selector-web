@@ -268,19 +268,14 @@ export function useResponsiveColumns(): {
 
   const columnCount =
     useMemo(() => {
-      if (width < 640)
-        return 2;
-
-      if (width < 768)
-        return 3;
-
-      if (width < 1024)
-        return 4;
-
-      if (width < 1440)
-        return 5;
-
-      return 6;
+      if (width < 400) return 2; // Small mobile / Foldable
+      if (width < 640) return 3; // Standard mobile
+      if (width < 768) return 4; // Tablet portrait
+      if (width < 1024) return 5; // Tablet landscape / Small laptop
+      if (width < 1440) return 6; // Standard desktop
+      if (width < 1920) return 8; // Large desktop
+      if (width < 2560) return 10; // Ultrawide
+      return 12; // 4K+
     }, [width]);
 
   return {

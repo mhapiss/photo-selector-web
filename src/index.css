@@ -12,20 +12,43 @@
   html {
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    /* Prevent pull-to-refresh globally if needed, but we keep it auto and handle on containers */
   }
 
   body {
     @apply bg-[#020204] text-white/90 font-sans antialiased;
     margin: 0;
+    min-height: 100vh;
+    /* Use dvh for exact viewport fitting on mobile, fallback to vh */
     min-height: 100dvh;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Prevent iOS bounce on body if it causes issues, but rely on .scroll-container usually */
+    overscroll-behavior-y: none;
+  }
+
+  /* Accessibility: Visible focus rings only when navigating via keyboard */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid rgba(139, 92, 246, 0.8);
+    outline-offset: 2px;
   }
 
   ::selection {
     background: rgba(139, 92, 246, 0.25);
     color: #ffffff;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -70,7 +93,7 @@
   }
 
   .safe-top {
-    padding-top: env(safe-area-inset-top);
+    padding-top: max(env(safe-area-inset-top), 1rem);
   }
 
   .tap-scale {
@@ -84,6 +107,22 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+
+  .prevent-select {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .no-drag {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+  }
 }
 
 /* Smooth momentum scrolling */
@@ -91,3 +130,5 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
+
+

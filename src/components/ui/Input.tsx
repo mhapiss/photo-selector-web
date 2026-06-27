@@ -37,7 +37,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           id={inputId}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : hint ? hintId : undefined}
-          className={`w-full h-12 rounded-lg border bg-white text-[15px] text-ink placeholder:text-slate-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-400/40 focus:border-primary ${
+          className={`w-full h-12 rounded-lg border bg-white text-[16px] text-ink placeholder:text-slate-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-400/40 focus:border-primary prevent-select touch-manipulation ${
             leftIcon ? 'pl-11 pr-4' : 'px-4'
           } ${
             error

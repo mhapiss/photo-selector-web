@@ -101,7 +101,7 @@ export function ManualPasteModal({ open, onClose, onConfirm }: ManualPasteModalP
                   ref={closeButtonRef}
                   onClick={onClose}
                   aria-label="Tutup"
-                  className="grid h-9 w-9 place-items-center rounded-full border border-white/5 bg-white/5 text-white/50 transition-all hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-white/5 bg-white/5 text-white/50 transition-all hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50 touch-manipulation"
                 >
                   <X size={16} />
                 </button>
@@ -118,7 +118,7 @@ export function ManualPasteModal({ open, onClose, onConfirm }: ManualPasteModalP
                   onChange={(e) => setText(e.target.value)}
                   rows={6}
                   placeholder={'IMG_0001.JPG\nIMG_0005.JPG\nIMG_0012.JPG'}
-                  className="w-full resize-y rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 font-mono text-[13px] text-white/80 placeholder:text-white/20 outline-none transition-all focus:border-violet-500/50 focus:bg-white/[0.04] focus:ring-2 focus:ring-violet-500/20"
+                  className="w-full resize-y rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 font-mono text-[16px] text-white/80 placeholder:text-white/20 outline-none transition-all focus:border-violet-500/50 focus:bg-white/[0.04] focus:ring-2 focus:ring-violet-500/20 prevent-select touch-manipulation"
                   aria-label="Daftar nama file gambar"
                 />
               </div>

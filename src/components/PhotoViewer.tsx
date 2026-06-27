@@ -6,20 +6,19 @@ import React, {
   useMemo,
 } from 'react';
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  Check,
   ZoomIn,
   ZoomOut,
-  Maximize2,
   ImageOff,
   RefreshCw,
   Download,
   Info,
   RotateCw,
-  Fullscreen,
   X,
+  CheckCircle2,
+  Expand,
+  ScanLine,
 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, animate } from 'framer-motion';
 import { driveThumbUrl, driveMediumUrl, driveLargeUrl } from '../lib/drive';
@@ -27,7 +26,7 @@ import { driveThumbUrl, driveMediumUrl, driveLargeUrl } from '../lib/drive';
 // ===== TYPES =====
 export type PhotoFile = {
   id: string;
-  name: string;
+  name?: string;
   size?: number;
   mimeType?: string;
   thumbnailUrl?: string;
@@ -117,7 +116,6 @@ function useImageLoader(photo: PhotoFile | undefined, fullRes: boolean) {
       }
       const url = urls[attempt++];
       const img = new Image();
-      img.crossOrigin = 'anonymous';
       img.referrerPolicy = 'no-referrer';
       img.onload = () => {
         if (!cancelled) { setImageUrl(url); setIsLoading(false); setImageError(false); }
@@ -145,7 +143,6 @@ function useImageLoader(photo: PhotoFile | undefined, fullRes: boolean) {
     const urls = buildImageUrls(target, false);
     if (urls.length) {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
       img.referrerPolicy = 'no-referrer';
       img.src = urls[0];
     }
@@ -194,308 +191,573 @@ function useAutoHideControls(containerRef: React.RefObject<HTMLDivElement>, time
   return { showControls, show, toggle };
 }
 
-// ===== REUSABLE UI COMPONENTS =====
+// ===== SHARED STYLES =====
+const glassStyle = {
+  background: 'rgba(10, 10, 15, 0.6)',
+  backdropFilter: 'blur(24px)',
+  WebkitBackdropFilter: 'blur(24px)',
+};
+
+const toolbarGlassStyle = {
+  background: 'rgba(18, 18, 24, 0.75)',
+  backdropFilter: 'blur(40px)',
+  WebkitBackdropFilter: 'blur(40px)',
+};
+
+// Icon button base classes
+const iconBtnBase =
+  'flex items-center justify-center rounded-full transition-all duration-150 touch-manipulation shrink-0 focus-visible:ring-2 focus-visible:ring-white/40';
+const iconBtnSm = `${iconBtnBase} w-9 h-9 text-white/70 hover:text-white hover:bg-white/10 active:scale-90`;
+const iconBtnMd = `${iconBtnBase} w-11 h-11 text-white/80 hover:text-white hover:bg-white/10 active:scale-90`;
+
+// ===== SUB-COMPONENTS =====
+
+// Background: subtle dark with vignette + noise
 const BackgroundLayer: React.FC<{ darken: boolean }> = React.memo(({ darken }) => (
   <div className="absolute inset-0 z-0 pointer-events-none">
-    <div className="absolute inset-0 bg-[#050505]" />
-    <div
-      className="absolute inset-0 transition-opacity duration-500"
+    <div className="absolute inset-0 bg-[#060608]" />
+    <motion.div
+      className="absolute inset-0"
+      animate={{ opacity: darken ? 0.5 : 0.3 }}
+      transition={{ duration: 0.6 }}
       style={{
         background:
-          'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.6) 100%)',
+          'radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.02) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.7) 100%)',
       }}
-    />
-    <div
-      className="absolute inset-0 opacity-30 mix-blend-overlay"
-      style={{
-        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.4'/%3E%3C/svg%3E")`,
-        backgroundSize: '256px 256px',
-      }}
-    />
-    <motion.div
-      className="absolute inset-0 bg-black"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: darken ? 0.3 : 0 }}
-      transition={{ duration: 0.8 }}
     />
   </div>
 ));
+BackgroundLayer.displayName = 'BackgroundLayer';
 
-// ── NEW: Close button (top‑left, always visible) ──
-const CloseButton: React.FC<{ onClose: () => void }> = React.memo(({ onClose }) => (
-  <motion.button
-    className="absolute top-0 left-0 z-40 p-4"
-    style={{
-      paddingTop: 'max(env(safe-area-inset-top), 16px)',
-      paddingLeft: 'max(env(safe-area-inset-left), 16px)',
-    }}
-    onClick={onClose}
-    aria-label="Close viewer"
-    initial={{ opacity: 0, scale: 0.8 }}
-    animate={{ opacity: 1, scale: 1 }}
-    exit={{ opacity: 0, scale: 0.8 }}
-    whileHover={{ scale: 1.1 }}
-    whileTap={{ scale: 0.9 }}
-    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-  >
-    <div
-      className="w-11 h-11 rounded-full flex items-center justify-center border border-white/20 shadow-lg"
-      style={{
-        background: 'rgba(0,0,0,0.5)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-      }}
-    >
-      <X size={22} strokeWidth={2.5} className="text-white" />
-    </div>
-  </motion.button>
-));
-
-// ── NEW: Glass button for top‑right actions ──
-const GlassButton: React.FC<{
-  onClick: (e: React.MouseEvent) => void;
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  disabled?: boolean;
-}> = React.memo(({ onClick, icon, label, active, disabled }) => (
-  <motion.button
-    onClick={onClick}
-    disabled={disabled}
-    className={`w-10 h-10 rounded-full flex items-center justify-center border border-white/20 transition-colors ${
-      active ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10'
-    } disabled:opacity-30`}
-    style={{
-      background: active ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.3)',
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-    }}
-    whileHover={{ scale: 1.1 }}
-    whileTap={{ scale: 0.9 }}
-    aria-label={label}
-  >
-    {icon}
-  </motion.button>
-));
-
-// ── NEW: Top‑right actions (full‑res & fullscreen), auto‑hide with controls ──
-const TopRightActions: React.FC<{
+// Top bar — Google Photos / Apple Photos style
+const TopBar: React.FC<{
+  photo: PhotoFile;
   showControls: boolean;
-  fullResMode: boolean;
-  isImageReady: boolean;
-  onToggleFullRes: (e: React.MouseEvent) => void;
+  onClose: () => void;
+  selected: boolean;
+  selectionIndex?: number | null;
+  onToggleSelect: () => void;
+  onRotate: (e: React.MouseEvent) => void;
+  onDownload: (e: React.MouseEvent) => void;
+  onToggleInfo: (e: React.MouseEvent) => void;
   onToggleFullscreen: (e: React.MouseEvent) => void;
-}> = React.memo(({ showControls, fullResMode, isImageReady, onToggleFullRes, onToggleFullscreen }) => (
+  isImageReady: boolean;
+  isMobile: boolean;
+}> = React.memo(({
+  photo, showControls, onClose, selected, selectionIndex,
+  onToggleSelect, onRotate, onDownload, onToggleInfo,
+  onToggleFullscreen, isImageReady, isMobile,
+}) => (
   <AnimatePresence>
     {showControls && (
       <motion.div
-        className="absolute top-0 right-0 z-30 flex items-center gap-1 p-4"
+        className="absolute top-0 left-0 right-0 z-40 pointer-events-auto"
         style={{
-          paddingTop: 'max(env(safe-area-inset-top), 16px)',
-          paddingRight: 'max(env(safe-area-inset-right), 16px)',
+          background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 60%, transparent 100%)',
+          paddingTop: 'max(env(safe-area-inset-top), 0px)',
         }}
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 20 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 38 }}
       >
-        <GlassButton
-          onClick={onToggleFullRes}
-          active={fullResMode}
-          icon={<Maximize2 size={17} strokeWidth={2} />}
-          label="Toggle full resolution"
-          disabled={!isImageReady}
-        />
-        <GlassButton
-          onClick={onToggleFullscreen}
-          icon={<Fullscreen size={17} strokeWidth={2} />}
-          label="Toggle fullscreen"
-        />
+        <div className="flex items-center justify-between px-2 sm:px-3 h-14 sm:h-16">
+          {/* LEFT: Close + Filename */}
+          <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1 mr-2">
+            <button
+              onClick={onClose}
+              className={`${iconBtnMd} shrink-0`}
+              aria-label="Tutup viewer"
+            >
+              <X size={20} strokeWidth={2.5} />
+            </button>
+            {!isMobile && (
+              <span
+                className="text-white/80 text-sm font-medium truncate leading-tight"
+                style={{ textShadow: '0 1px 8px rgba(0,0,0,0.8)' }}
+                title={photo.name}
+              >
+                {photo.name ?? ''}
+              </span>
+            )}
+          </div>
+
+          {/* RIGHT: Actions */}
+          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+            {/* Rotate — always visible */}
+            <button
+              onClick={onRotate}
+              disabled={!isImageReady}
+              className={`${iconBtnSm} disabled:opacity-30`}
+              aria-label="Putar gambar"
+            >
+              <RotateCw size={17} strokeWidth={2} />
+            </button>
+
+            {/* Download — always visible */}
+            <button
+              onClick={onDownload}
+              disabled={!isImageReady}
+              className={`${iconBtnSm} disabled:opacity-30`}
+              aria-label="Unduh foto"
+            >
+              <Download size={17} strokeWidth={2} />
+            </button>
+
+            {/* Info — always visible */}
+            <button
+              onClick={onToggleInfo}
+              className={iconBtnSm}
+              aria-label="Info foto"
+            >
+              <Info size={17} strokeWidth={2} />
+            </button>
+
+            {/* Fullscreen — desktop only */}
+            {!isMobile && (
+              <button
+                onClick={onToggleFullscreen}
+                className={iconBtnSm}
+                aria-label="Layar penuh"
+              >
+                <Expand size={16} strokeWidth={2} />
+              </button>
+            )}
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-white/15 mx-1 sm:mx-2 shrink-0" />
+
+            {/* Select button — desktop: full pill, mobile: icon only */}
+            {isMobile ? (
+              <button
+                onClick={onToggleSelect}
+                className={`${iconBtnMd} ${selected ? 'text-emerald-400' : 'text-white/70'}`}
+                aria-label={selected ? 'Batalkan pilihan' : 'Pilih foto'}
+              >
+                <CheckCircle2 size={20} strokeWidth={selected ? 2.5 : 1.5} />
+              </button>
+            ) : (
+              <motion.button
+                onClick={onToggleSelect}
+                className={`flex items-center gap-2 h-9 px-4 rounded-full font-medium text-sm transition-colors duration-200 touch-manipulation border ${
+                  selected
+                    ? 'bg-emerald-500/90 border-emerald-400/60 text-white hover:bg-emerald-400/90'
+                    : 'bg-white/10 border-white/20 text-white/90 hover:bg-white/20'
+                }`}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                aria-label={selected ? 'Batalkan pilihan' : 'Pilih foto'}
+              >
+                {selected ? (
+                  <CheckCircle2 size={16} strokeWidth={2.5} />
+                ) : (
+                  <div className="w-3.5 h-3.5 rounded-full border-[1.5px] border-white/60" />
+                )}
+                <span>{selected ? 'Terpilih' : 'Pilih Foto'}</span>
+                {selected && selectionIndex != null && (
+                  <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+                    {selectionIndex + 1}
+                  </span>
+                )}
+              </motion.button>
+            )}
+          </div>
+        </div>
       </motion.div>
     )}
   </AnimatePresence>
 ));
+TopBar.displayName = 'TopBar';
 
-// ── Info Sheet (unchanged) ──
-const InfoSheet: React.FC<{
-  photo: PhotoFile;
-  fullResMode: boolean;
+// Bottom bar — mobile only: Select pill + secondary actions
+const MobileBottomBar: React.FC<{
   show: boolean;
-  onClose: () => void;
-}> = React.memo(({ photo, fullResMode, show, onClose }) => (
-  <AnimatePresence>
-    {show && (
-      <>
-        <motion.div
-          className="fixed inset-0 z-30"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-        />
-        <motion.div
-          className="absolute bottom-0 left-0 right-0 z-40 max-h-[70vh] overflow-y-auto rounded-t-3xl border-t border-white/10 shadow-2xl"
-          style={{ background: 'rgba(15,15,15,0.97)', backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)' }}
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-          drag="y"
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={0.2}
-          onDragEnd={(_, info) => { if (info.offset.y > 100) onClose(); }}
-        >
-          <div className="flex justify-center pt-3 pb-1">
-            <div className="w-10 h-1 rounded-full bg-white/20" />
-          </div>
-          <div className="p-6 pt-2">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-white tracking-wide">Detail Foto</h3>
-              <button onClick={onClose} className="p-2 rounded-full text-white/50 hover:bg-white/10 active:scale-90 transition-all">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="space-y-0 text-sm">
-              {[
-                ['Nama File', photo.name],
-                ['Ukuran', photo.size ? `${(photo.size / 1024 / 1024).toFixed(2)} MB` : '-'],
-                photo.width ? ['Dimensi', `${photo.width}×${photo.height}`] : null,
-                ['Mode Tampilan', fullResMode ? 'Resolusi penuh' : 'Optimal'],
-              ].filter((item): item is [string, string] => item !== null).map(([label, value]) => (
-                <div key={label} className="flex justify-between py-2.5 border-b border-white/5">
-                  <span className="text-white/40">{label}</span>
-                  <span className="text-white/90 truncate max-w-[200px] text-right">{value}</span>
-                </div>
-              ))}
-              {photo.exif && (
-                <div className="pt-3 mt-1">
-                  <p className="text-white/30 text-[10px] uppercase tracking-widest mb-3">EXIF Data</p>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-white/80">
-                    {photo.exif.make && <p className="col-span-2">{photo.exif.make} {photo.exif.model}</p>}
-                    {photo.exif.iso && <p>ISO {photo.exif.iso}</p>}
-                    {photo.exif.aperture && <p>{photo.exif.aperture}</p>}
-                    {photo.exif.shutterSpeed && <p>{photo.exif.shutterSpeed}</p>}
-                    {photo.exif.focalLength && <p>{photo.exif.focalLength}</p>}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </motion.div>
-      </>
-    )}
-  </AnimatePresence>
-));
-
-// ── Bottom toolbar (now includes EXIF) ──
-const FloatingToolbar: React.FC<{
+  selected: boolean;
+  selectionIndex?: number | null;
+  onToggleSelect: () => void;
   zoom: number;
   isImageReady: boolean;
-  showControls: boolean;
   onZoomOut: (e: React.MouseEvent) => void;
   onZoomIn: (e: React.MouseEvent) => void;
   onResetZoom: (e: React.MouseEvent) => void;
-  onRotate: (e: React.MouseEvent) => void;
-  onDownload: (e: React.MouseEvent) => void;
-  onToggleInfo: (e: React.MouseEvent) => void;
-}> = React.memo(({ zoom, isImageReady, showControls, onZoomOut, onZoomIn, onResetZoom, onRotate, onDownload, onToggleInfo }) => (
+}> = React.memo(({
+  show, selected, selectionIndex, onToggleSelect,
+  zoom, isImageReady, onZoomOut, onZoomIn, onResetZoom,
+}) => (
   <AnimatePresence>
-    {showControls && (
+    {show && (
       <motion.div
-        className="absolute left-1/2 -translate-x-1/2 z-30"
+        className="absolute left-0 right-0 z-30 pointer-events-auto"
         style={{
-          bottom: 'calc(max(env(safe-area-inset-bottom, 20px), 20px) + 80px)',
+          bottom: 0,
+          background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
+          paddingBottom: 'max(env(safe-area-inset-bottom), 16px)',
         }}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 16 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+        transition={{ type: 'spring', stiffness: 380, damping: 36 }}
+      >
+        <div className="flex flex-col items-center gap-3 px-4 pt-4 pb-2">
+          {/* Primary: Select Pill */}
+          <motion.button
+            onClick={onToggleSelect}
+            className={`w-full max-w-[280px] flex items-center justify-center gap-2.5 h-12 rounded-2xl font-semibold text-sm transition-colors duration-200 touch-manipulation border shadow-xl ${
+              selected
+                ? 'bg-emerald-500 border-emerald-400/50 text-white'
+                : 'bg-white/12 border-white/20 text-white backdrop-blur-sm'
+            }`}
+            style={selected ? {} : toolbarGlassStyle}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            aria-label={selected ? 'Batalkan pilihan' : 'Pilih foto'}
+          >
+            {selected ? (
+              <CheckCircle2 size={20} strokeWidth={2.5} />
+            ) : (
+              <div className="w-4 h-4 rounded-full border-2 border-white/60" />
+            )}
+            <span>{selected ? 'Terpilih' : 'Pilih Foto'}</span>
+            {selected && selectionIndex != null && (
+              <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white/25 text-[10px] font-bold">
+                {selectionIndex + 1}
+              </span>
+            )}
+          </motion.button>
+
+          {/* Secondary: Zoom controls pill */}
+          <div
+            className="flex items-center rounded-full border border-white/10 px-1"
+            style={toolbarGlassStyle}
+          >
+            <button
+              onClick={onZoomOut}
+              disabled={!isImageReady || zoom <= MIN_ZOOM}
+              className={`${iconBtnSm} disabled:opacity-30`}
+              aria-label="Perkecil"
+            >
+              <ZoomOut size={16} strokeWidth={2} />
+            </button>
+            <button
+              onClick={onResetZoom}
+              disabled={!isImageReady}
+              className="h-9 px-3 text-xs font-medium text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all tabular-nums min-w-[52px] text-center touch-manipulation"
+              title="Reset zoom"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              onClick={onZoomIn}
+              disabled={!isImageReady || zoom >= MAX_ZOOM}
+              className={`${iconBtnSm} disabled:opacity-30`}
+              aria-label="Perbesar"
+            >
+              <ZoomIn size={16} strokeWidth={2} />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+));
+MobileBottomBar.displayName = 'MobileBottomBar';
+
+// Desktop floating zoom toolbar
+const DesktopZoomBar: React.FC<{
+  show: boolean;
+  zoom: number;
+  isImageReady: boolean;
+  onZoomOut: (e: React.MouseEvent) => void;
+  onZoomIn: (e: React.MouseEvent) => void;
+  onResetZoom: (e: React.MouseEvent) => void;
+}> = React.memo(({ show, zoom, isImageReady, onZoomOut, onZoomIn, onResetZoom }) => (
+  <AnimatePresence>
+    {show && (
+      <motion.div
+        className="absolute left-1/2 -translate-x-1/2 z-30 pointer-events-auto"
+        style={{ bottom: 'calc(max(env(safe-area-inset-bottom, 16px), 16px) + 16px)' }}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 12 }}
+        transition={{ type: 'spring', stiffness: 380, damping: 36 }}
       >
         <div
-          className="flex items-center gap-1 px-3 py-1.5 border border-white/10 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.8)]"
-          style={{ background: 'rgba(255,255,255,0.04)', backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)' }}
+          className="flex items-center rounded-full border border-white/10 shadow-2xl px-1"
+          style={toolbarGlassStyle}
         >
-          <button onClick={onZoomOut} disabled={!isImageReady || zoom <= MIN_ZOOM} className="p-2.5 rounded-full text-white/70 hover:bg-white/10 active:scale-90 transition-all disabled:opacity-30">
-            <ZoomOut size={18} strokeWidth={2} />
+          <button
+            onClick={onZoomOut}
+            disabled={!isImageReady || zoom <= MIN_ZOOM}
+            className={`${iconBtnSm} disabled:opacity-30`}
+            aria-label="Perkecil"
+          >
+            <ZoomOut size={16} strokeWidth={2} />
           </button>
-          <button onClick={onResetZoom} disabled={!isImageReady} className="min-w-[52px] p-2 rounded-full text-center text-xs font-medium text-white/90 hover:bg-white/10 transition-all tabular-nums" title="Reset zoom">
+          <button
+            onClick={onResetZoom}
+            disabled={!isImageReady}
+            className="h-9 px-3 text-xs font-medium text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all tabular-nums min-w-[52px] text-center touch-manipulation"
+            title="Reset zoom (0)"
+          >
             {Math.round(zoom * 100)}%
           </button>
-          <button onClick={onZoomIn} disabled={!isImageReady || zoom >= MAX_ZOOM} className="p-2.5 rounded-full text-white/70 hover:bg-white/10 active:scale-90 transition-all disabled:opacity-30">
-            <ZoomIn size={18} strokeWidth={2} />
-          </button>
-          <div className="w-px h-5 bg-white/10 mx-1" />
-          <button onClick={onRotate} disabled={!isImageReady} className="p-2.5 rounded-full text-white/70 hover:bg-white/10 active:scale-90 transition-all disabled:opacity-30">
-            <RotateCw size={17} strokeWidth={2} />
-          </button>
-          <button onClick={onDownload} disabled={!isImageReady} className="p-2.5 rounded-full text-white/70 hover:bg-white/10 active:scale-90 transition-all disabled:opacity-30">
-            <Download size={17} strokeWidth={2} />
-          </button>
-          <button onClick={onToggleInfo} className="p-2.5 rounded-full text-white/70 hover:bg-white/10 active:scale-90 transition-all" aria-label="EXIF info">
-            <Info size={17} strokeWidth={2} />
+          <button
+            onClick={onZoomIn}
+            disabled={!isImageReady || zoom >= MAX_ZOOM}
+            className={`${iconBtnSm} disabled:opacity-30`}
+            aria-label="Perbesar"
+          >
+            <ZoomIn size={16} strokeWidth={2} />
           </button>
         </div>
       </motion.div>
     )}
   </AnimatePresence>
 ));
+DesktopZoomBar.displayName = 'DesktopZoomBar';
 
-// ── NEW: Select Photo CTA (always visible, centered above safe area) ──
-const SelectButton: React.FC<{
-  selected: boolean;
-  selectionIndex?: number | null;
-  onToggle: () => void;
-}> = React.memo(({ selected, selectionIndex, onToggle }) => (
-  <motion.button
-    className="absolute left-1/2 -translate-x-1/2 z-30"
-    style={{
-      bottom: 'calc(max(env(safe-area-inset-bottom, 20px), 20px) + 16px)',
-    }}
-    onClick={onToggle}
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    exit={{ opacity: 0, y: 20 }}
-    whileHover={{ scale: 1.02 }}
-    whileTap={{ scale: 0.96 }}
-    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-    aria-label={selected ? 'Deselect photo' : 'Select photo'}
-  >
-    <div
-      className={`flex items-center gap-2 px-6 py-3 rounded-full border text-white font-semibold shadow-lg transition-colors duration-300 ${
-        selected
-          ? 'bg-blue-500 border-blue-400'
-          : 'bg-white/10 border-white/20 hover:bg-white/20'
-      }`}
-      style={{
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        minWidth: '180px',
-        justifyContent: 'center',
-      }}
-    >
-      {selected ? (
-        <motion.span
-          key="check"
-          initial={{ scale: 0, rotate: -90 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+// Navigation arrow — desktop only
+const NavArrow: React.FC<{
+  direction: 'prev' | 'next';
+  show: boolean;
+  onClick: (e: React.MouseEvent) => void;
+}> = React.memo(({ direction, show, onClick }) => {
+  const isPrev = direction === 'prev';
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.button
+          className={`absolute top-1/2 -translate-y-1/2 z-20 hidden md:flex items-center justify-center ${
+            isPrev ? 'left-4 lg:left-6' : 'right-4 lg:right-6'
+          }`}
+          initial={{ opacity: 0, x: isPrev ? -12 : 12 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: isPrev ? -12 : 12 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 36 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={onClick}
+          aria-label={isPrev ? 'Foto sebelumnya' : 'Foto berikutnya'}
         >
-          <Check size={20} strokeWidth={3} />
-        </motion.span>
-      ) : (
-        <span>Select Photo</span>
+          <div
+            className="w-11 h-11 lg:w-12 lg:h-12 rounded-full flex items-center justify-center border border-white/15 text-white/70 hover:text-white transition-colors"
+            style={glassStyle}
+          >
+            {isPrev ? (
+              <ChevronLeft size={22} strokeWidth={2} />
+            ) : (
+              <ChevronRight size={22} strokeWidth={2} />
+            )}
+          </div>
+        </motion.button>
       )}
-      {selected && <span>Selected</span>}
-      {selectionIndex != null && (
-        <span className="text-xs opacity-80 ml-1">#{selectionIndex + 1}</span>
+    </AnimatePresence>
+  );
+});
+NavArrow.displayName = 'NavArrow';
+
+// Info sheet — bottom sheet on mobile, side panel on desktop
+const InfoSheet: React.FC<{
+  photo: PhotoFile;
+  fullResMode: boolean;
+  show: boolean;
+  onClose: () => void;
+  isMobile: boolean;
+}> = React.memo(({ photo, fullResMode, show, onClose, isMobile }) => (
+  <AnimatePresence>
+    {show && (
+      <>
+        {/* Backdrop */}
+        <motion.div
+          className="fixed inset-0 z-40"
+          style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        />
+
+        {/* Panel */}
+        {isMobile ? (
+          // Mobile: bottom drag sheet
+          <motion.div
+            className="absolute bottom-0 left-0 right-0 z-50 max-h-[75vh] overflow-y-auto rounded-t-3xl border-t border-white/10 shadow-2xl"
+            style={{ background: 'rgba(12,12,18,0.97)', backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)' }}
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 320, damping: 34 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={0.2}
+            onDragEnd={(_, info) => { if (info.offset.y > 100) onClose(); }}
+          >
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+            <InfoContent photo={photo} fullResMode={fullResMode} onClose={onClose} />
+          </motion.div>
+        ) : (
+          // Desktop: right side panel
+          <motion.div
+            className="absolute right-0 top-0 bottom-0 z-50 w-72 lg:w-80 overflow-y-auto border-l border-white/10 shadow-2xl"
+            style={{ background: 'rgba(12,12,18,0.97)', backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)' }}
+            initial={{ x: '100%', opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: '100%', opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 360, damping: 38 }}
+          >
+            <InfoContent photo={photo} fullResMode={fullResMode} onClose={onClose} />
+          </motion.div>
+        )}
+      </>
+    )}
+  </AnimatePresence>
+));
+InfoSheet.displayName = 'InfoSheet';
+
+const InfoContent: React.FC<{
+  photo: PhotoFile;
+  fullResMode: boolean;
+  onClose: () => void;
+}> = ({ photo, fullResMode, onClose }) => (
+  <div className="p-5 pt-4">
+    <div className="flex items-center justify-between mb-5">
+      <h3 className="text-sm font-semibold text-white/90 tracking-wide">Detail Foto</h3>
+      <button
+        onClick={onClose}
+        className={`${iconBtnSm}`}
+        aria-label="Tutup info"
+      >
+        <X size={16} strokeWidth={2} />
+      </button>
+    </div>
+    <div className="space-y-0 text-sm">
+      {[
+        ['Nama File', photo.name ?? '-'],
+        ['Ukuran', photo.size ? `${(photo.size / 1024 / 1024).toFixed(2)} MB` : '-'],
+        photo.width ? ['Dimensi', `${photo.width} × ${photo.height}`] : null,
+        ['Mode Tampilan', fullResMode ? 'Resolusi penuh' : 'Optimal'],
+      ].filter((item): item is [string, string] => item !== null).map(([label, value]) => (
+        <div key={label} className="flex justify-between py-3 border-b border-white/5">
+          <span className="text-white/40 shrink-0">{label}</span>
+          <span className="text-white/85 truncate max-w-[180px] text-right ml-3">{value}</span>
+        </div>
+      ))}
+      {photo.exif && (
+        <div className="pt-4 mt-1">
+          <p className="text-white/30 text-[10px] uppercase tracking-widest mb-3">EXIF Data</p>
+          <div className="grid grid-cols-2 gap-y-2 gap-x-3 text-xs text-white/70">
+            {photo.exif.make && <p className="col-span-2 text-white/85">{photo.exif.make} {photo.exif.model}</p>}
+            {photo.exif.iso && <p>ISO {photo.exif.iso}</p>}
+            {photo.exif.aperture && <p>{photo.exif.aperture}</p>}
+            {photo.exif.shutterSpeed && <p>{photo.exif.shutterSpeed}</p>}
+            {photo.exif.focalLength && <p>{photo.exif.focalLength}</p>}
+          </div>
+        </div>
       )}
     </div>
-  </motion.button>
+  </div>
+);
+
+// Full-res toggle floating badge
+const FullResBadge: React.FC<{
+  show: boolean;
+  active: boolean;
+  onToggle: (e: React.MouseEvent) => void;
+  isImageReady: boolean;
+}> = React.memo(({ show, active, onToggle, isImageReady }) => (
+  <AnimatePresence>
+    {show && (
+      <motion.button
+        className="absolute top-16 sm:top-[72px] right-3 sm:right-4 z-30 pointer-events-auto"
+        onClick={onToggle}
+        disabled={!isImageReady}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        aria-label={active ? 'Mode resolusi penuh aktif' : 'Aktifkan resolusi penuh'}
+      >
+        <div
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-[11px] font-medium transition-colors duration-200 ${
+            active
+              ? 'text-blue-300 border-blue-500/50 bg-blue-500/20'
+              : 'text-white/50 border-white/10 bg-white/5 hover:text-white/70'
+          }`}
+        >
+          <ScanLine size={12} strokeWidth={2} />
+          <span>Resolusi Penuh</span>
+        </div>
+      </motion.button>
+    )}
+  </AnimatePresence>
 ));
+FullResBadge.displayName = 'FullResBadge';
+
+// Loading spinner
+const LoadingState: React.FC<{ thumbnailUrl?: string }> = React.memo(({ thumbnailUrl }) => (
+  <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
+    {thumbnailUrl && (
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: `url(${thumbnailUrl})`,
+          backgroundSize: 'contain',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          filter: 'blur(32px)',
+          opacity: 0.15,
+          transform: 'scale(1.05)',
+        }}
+      />
+    )}
+    <div className="relative flex flex-col items-center gap-4">
+      <div className="relative w-10 h-10">
+        <div className="absolute inset-0 rounded-full border-2 border-white/5" />
+        <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-white/60 animate-spin" />
+      </div>
+      <span className="text-[11px] text-white/30 tracking-[0.2em] uppercase font-medium">Memuat</span>
+    </div>
+  </div>
+));
+LoadingState.displayName = 'LoadingState';
+
+// Error state
+const ErrorState: React.FC<{ onRetry: () => void }> = React.memo(({ onRetry }) => (
+  <motion.div
+    className="absolute inset-0 flex flex-col items-center justify-center z-10 gap-4"
+    initial={{ opacity: 0, scale: 0.95 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ duration: 0.3 }}
+  >
+    <motion.div
+      className="p-5 rounded-2xl bg-white/5 border border-white/10"
+      animate={{ x: [0, -6, 6, -4, 4, 0] }}
+      transition={{ delay: 0.3, duration: 0.5, ease: 'easeInOut' }}
+    >
+      <ImageOff size={28} className="text-white/35" />
+    </motion.div>
+    <div className="flex flex-col items-center gap-1">
+      <p className="text-sm text-white/50 font-medium">Gagal memuat gambar</p>
+      <p className="text-xs text-white/25">Periksa koneksi internet Anda</p>
+    </div>
+    <button
+      onClick={onRetry}
+      className="flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-5 py-2.5 text-xs text-white/80 hover:bg-white/18 hover:text-white active:scale-95 transition-all touch-manipulation"
+    >
+      <RefreshCw size={13} strokeWidth={2} />
+      Coba lagi
+    </button>
+  </motion.div>
+));
+ErrorState.displayName = 'ErrorState';
 
 // ===== MAIN COMPONENT =====
-type PhotoViewerProps = {
+export type PhotoViewerProps = {
   photos: PhotoFile[];
   index: number;
   selected: boolean;
@@ -521,6 +783,7 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
   const [fullResMode, setFullResMode] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   // ── Refs ──
   const containerRef = useRef<HTMLDivElement>(null);
@@ -535,6 +798,14 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
   const isPinching = useRef(false);
 
   const swipeX = useMotionValue(0);
+
+  // ── Responsive detection ──
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   // ── Derived ──
   const photo = useMemo(() => photos[index], [photos, index]);
@@ -814,17 +1085,19 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [goPrev, goNext, onClose, onToggle, photo, index, photos.length, onNavigate, applyZoom]);
 
-  const toggleFullscreen = useCallback(() => {
+  const toggleFullscreen = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
     else document.exitFullscreen?.().catch(() => {});
   }, []);
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!photo) return;
     const url = photo.directUrl || photo.thumbnailUrl;
     if (!url) return;
     const a = document.createElement('a');
-    a.href = url; a.download = photo.name; a.target = '_blank';
+    a.href = url; a.download = photo.name ?? 'foto'; a.target = '_blank';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }, [photo]);
 
@@ -833,9 +1106,21 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
     setShowInfo(v => !v);
   }, []);
 
+  const handleRotate = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRotation(r => (r + 90) % 360);
+    showCtrl();
+  }, [showCtrl]);
+
+  const handleToggleFullRes = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFullResMode(v => !v);
+    showCtrl();
+  }, [showCtrl]);
+
   if (!photo) return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black">
-      <p className="text-white/40 text-sm">Foto tidak tersedia</p>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#060608]">
+      <p className="text-white/30 text-sm">Foto tidak tersedia</p>
     </div>
   );
 
@@ -845,13 +1130,13 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
       className="fixed inset-0 z-[100] overflow-hidden select-none"
       style={{
         touchAction: 'none',
-        background: '#050505',
-        cursor: isDragging ? 'grabbing' : 'default',
+        background: '#060608',
+        cursor: isDragging ? 'grabbing' : zoom > 1 ? 'grab' : 'default',
       }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
       onPointerDown={onMouseDown}
       onPointerMove={onMouseMove}
       onPointerUp={onMouseUp}
@@ -860,22 +1145,40 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
       {/* ── Background ── */}
       <BackgroundLayer darken={!showControls} />
 
-      {/* ── Close button (top‑left, always visible) ── */}
-      <CloseButton onClose={onClose} />
-
-      {/* ── Top‑right actions (full‑res & fullscreen) ── */}
-      <TopRightActions
+      {/* ── Top Bar ── */}
+      <TopBar
+        photo={photo}
         showControls={showControls}
-        fullResMode={fullResMode}
+        onClose={onClose}
+        selected={selected}
+        selectionIndex={selectionIndex}
+        onToggleSelect={() => photo && onToggle(photo.id)}
+        onRotate={handleRotate}
+        onDownload={handleDownload}
+        onToggleInfo={handleToggleInfo}
+        onToggleFullscreen={toggleFullscreen}
         isImageReady={isImageReady}
-        onToggleFullRes={(e) => { e.stopPropagation(); setFullResMode(v => !v); showCtrl(); }}
-        onToggleFullscreen={(e) => { e.stopPropagation(); toggleFullscreen(); }}
+        isMobile={isMobile}
       />
 
-      {/* ── Info sheet ── */}
-      <InfoSheet photo={photo} fullResMode={fullResMode} show={showInfo} onClose={() => setShowInfo(false)} />
+      {/* ── Full-res toggle badge ── */}
+      <FullResBadge
+        show={showControls}
+        active={fullResMode}
+        onToggle={handleToggleFullRes}
+        isImageReady={isImageReady}
+      />
 
-      {/* Photo area */}
+      {/* ── Info sheet / panel ── */}
+      <InfoSheet
+        photo={photo}
+        fullResMode={fullResMode}
+        show={showInfo}
+        onClose={() => setShowInfo(false)}
+        isMobile={isMobile}
+      />
+
+      {/* ── Photo area ── */}
       <div
         className="absolute inset-0 flex items-center justify-center overflow-hidden"
         onTouchStart={onTouchStart}
@@ -883,46 +1186,11 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
         onTouchEnd={onTouchEnd}
       >
         {/* Loading */}
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
-            {photo.thumbnailUrl && (
-              <div
-                className="absolute inset-0"
-                style={{
-                  backgroundImage: `url(${photo.thumbnailUrl})`,
-                  backgroundSize: 'contain',
-                  backgroundPosition: 'center',
-                  backgroundRepeat: 'no-repeat',
-                  filter: 'blur(24px)',
-                  opacity: 0.2,
-                }}
-              />
-            )}
-            <div className="relative flex flex-col items-center gap-3">
-              <div className="w-6 h-6 rounded-full border-2 border-white/10 border-t-white/50 animate-spin" />
-              <span className="text-[10px] text-white/30 tracking-widest uppercase">Memuat</span>
-            </div>
-          </div>
-        )}
+        {isLoading && <LoadingState thumbnailUrl={photo.thumbnailUrl} />}
 
         {/* Error */}
         {imageError && !isLoading && (
-          <motion.div
-            className="absolute inset-0 flex flex-col items-center justify-center z-10"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            <div className="p-4 rounded-full bg-white/5 mb-4 border border-white/10">
-              <ImageOff size={32} className="text-white/40" />
-            </div>
-            <p className="text-sm text-white/50 mb-4">Gagal memuat gambar</p>
-            <button
-              onClick={(e) => { e.stopPropagation(); load(); }}
-              className="flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-xs text-white/80 hover:bg-white/20 active:scale-95 transition-all"
-            >
-              <RefreshCw size={14} /> Coba lagi
-            </button>
-          </motion.div>
+          <ErrorState onRetry={() => { load(); }} />
         )}
 
         {/* Image container — swipeX on wrapper, transforms on image */}
@@ -935,16 +1203,22 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
               <motion.img
                 key={photo.id + String(fullResMode) + imageUrl}
                 src={imageUrl}
-                alt={photo.name}
+                alt={photo.name ?? 'Foto'}
                 draggable={false}
                 className="pointer-events-none select-none"
                 style={{
+                  // Intelligently fit image to available space
                   maxWidth: '100%',
                   maxHeight: '100%',
                   width: 'auto',
                   height: 'auto',
                   objectFit: 'contain',
                   display: 'block',
+                  // Padding accounts for top/bottom bars
+                  padding: isMobile
+                    ? 'max(env(safe-area-inset-top),56px) 8px max(env(safe-area-inset-bottom),130px) 8px'
+                    : '72px 80px 72px 80px',
+                  boxSizing: 'border-box',
                   x: pan.x,
                   y: pan.y,
                   scale: zoom,
@@ -952,72 +1226,76 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
                   WebkitBackfaceVisibility: 'hidden',
                   backfaceVisibility: 'hidden',
                 }}
-                initial={{ opacity: 0, filter: 'blur(12px)' }}
-                animate={{ opacity: 1, filter: 'blur(0px)' }}
-                exit={{ opacity: 0, filter: 'blur(6px)' }}
-                transition={{ duration: 0.35, ease: 'easeOut' }}
+                initial={{ opacity: 0, filter: 'blur(16px)', scale: 0.98 }}
+                animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
+                exit={{ opacity: 0, filter: 'blur(8px)' }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
               />
             )}
           </AnimatePresence>
         </motion.div>
       </div>
 
-      {/* ── Navigation buttons ── */}
-      <AnimatePresence>
-        {showControls && isImageReady && canPrev && (
-          <motion.button
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -10 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-            whileHover={{ scale: 1.08 }}
-            onClick={(e) => { e.stopPropagation(); goPrev(); }}
-            className="absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 z-20 w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center rounded-full border border-white/10 text-white/60 hover:text-white transition-all active:scale-90"
-            style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
-            aria-label="Foto sebelumnya"
-          >
-            <ChevronLeft size={22} strokeWidth={2} />
-          </motion.button>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showControls && isImageReady && canNext && (
-          <motion.button
-            initial={{ opacity: 0, x: 10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 10 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-            whileHover={{ scale: 1.08 }}
-            onClick={(e) => { e.stopPropagation(); goNext(); }}
-            className="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 z-20 w-11 h-11 sm:w-12 sm:h-12 flex items-center justify-center rounded-full border border-white/10 text-white/60 hover:text-white transition-all active:scale-90"
-            style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
-            aria-label="Foto berikutnya"
-          >
-            <ChevronRight size={22} strokeWidth={2} />
-          </motion.button>
-        )}
-      </AnimatePresence>
-
-      {/* ── Bottom toolbar (now includes EXIF) ── */}
-      <FloatingToolbar
-        zoom={zoom}
-        isImageReady={isImageReady}
-        showControls={showControls}
-        onZoomOut={(e) => { e.stopPropagation(); applyZoom(zoom - 0.4); }}
-        onZoomIn={(e) => { e.stopPropagation(); applyZoom(zoom + 0.4); }}
-        onResetZoom={(e) => { e.stopPropagation(); applyZoom(1); }}
-        onRotate={(e) => { e.stopPropagation(); setRotation(r => (r + 90) % 360); showCtrl(); }}
-        onDownload={(e) => { e.stopPropagation(); handleDownload(); }}
-        onToggleInfo={handleToggleInfo}
+      {/* ── Navigation arrows — desktop only ── */}
+      <NavArrow
+        direction="prev"
+        show={showControls && isImageReady && canPrev}
+        onClick={(e) => { e.stopPropagation(); goPrev(); }}
+      />
+      <NavArrow
+        direction="next"
+        show={showControls && isImageReady && canNext}
+        onClick={(e) => { e.stopPropagation(); goNext(); }}
       />
 
-      {/* ── Select Photo CTA (always visible, centered above safe area) ── */}
-      <SelectButton
-        selected={selected}
-        selectionIndex={selectionIndex}
-        onToggle={() => photo && onToggle(photo.id)}
-      />
+      {/* ── Mobile bottom bar ── */}
+      {isMobile && (
+        <MobileBottomBar
+          show={showControls}
+          selected={selected}
+          selectionIndex={selectionIndex}
+          onToggleSelect={() => photo && onToggle(photo.id)}
+          zoom={zoom}
+          isImageReady={isImageReady}
+          onZoomOut={(e) => { e.stopPropagation(); applyZoom(zoom - 0.4); }}
+          onZoomIn={(e) => { e.stopPropagation(); applyZoom(zoom + 0.4); }}
+          onResetZoom={(e) => { e.stopPropagation(); applyZoom(1); }}
+        />
+      )}
+
+      {/* ── Desktop zoom toolbar ── */}
+      {!isMobile && (
+        <DesktopZoomBar
+          show={showControls}
+          zoom={zoom}
+          isImageReady={isImageReady}
+          onZoomOut={(e) => { e.stopPropagation(); applyZoom(zoom - 0.4); }}
+          onZoomIn={(e) => { e.stopPropagation(); applyZoom(zoom + 0.4); }}
+          onResetZoom={(e) => { e.stopPropagation(); applyZoom(1); }}
+        />
+      )}
+
+      {/* ── Photo counter ── */}
+      <AnimatePresence>
+        {showControls && photos.length > 1 && (
+          <motion.div
+            className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 pointer-events-none"
+            style={{
+              bottom: isMobile
+                ? 'calc(max(env(safe-area-inset-bottom, 16px), 16px) + 152px)'
+                : 'calc(max(env(safe-area-inset-bottom, 16px), 16px) + 60px)',
+            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <span className="text-[11px] text-white/30 font-medium tabular-nums">
+              {index + 1} / {photos.length}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
