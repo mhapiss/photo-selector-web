@@ -8,8 +8,8 @@ import {
   useVirtualGrid,
   useResponsiveColumns,
   naturalSort,
-} from '../lib/useVirtualGrid';
-import type { LoadError, LoadState, PhotoFile } from '../types';
+} from '../../hooks/useVirtualGrid';
+import type { LoadError, LoadState, PhotoFile } from '../../types';
 
 const GAP = 8;
 const ASPECT_RATIO = 1;

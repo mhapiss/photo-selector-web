@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ClipboardPaste } from 'lucide-react';
-import { parseFilenameList } from '../lib/drive';
-import type { PhotoFile } from '../types';
+import { parseFilenameList } from '../../services/driveService';
+import type { PhotoFile } from '../../types';
 
 type ManualPasteModalProps = {
   open: boolean;

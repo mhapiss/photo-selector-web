@@ -8,7 +8,7 @@ export type PhotoFile = {
   directUrl: string; // URL untuk akses langsung ke file
   webContentLink?: string;
   size?: number;
-  _raw?: any; // Optional untuk debugging
+  _raw?: unknown; // Optional untuk debugging
 };
 
 export type AlbumMeta = {

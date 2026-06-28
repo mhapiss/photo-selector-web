@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileImage, Check, RefreshCw } from 'lucide-react';
-import type { PhotoFile } from '../types';
+import type { PhotoFile } from '../../types';
 
 type PhotoCardProps = {
   photo: PhotoFile;
