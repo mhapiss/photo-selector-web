@@ -338,15 +338,6 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         show={showControls && isImageReady}
       />
 
-      <FloatingSelectButton
-        show={showControls}
-        selected={selected}
-        selectionIndex={selectionIndex}
-        isImageReady={isImageReady}
-        isMobile={isMobile}
-        onToggleSelect={onToggle ? handleToggleSelect : undefined}
-      />
-
       <NavArrow
         direction="prev"
         show={showControls && isImageReady && canPrev}
@@ -371,6 +362,10 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
           canNext={canNext}
           onPrev={goPrev}
           onNext={goNext}
+          selected={selected}
+          selectionIndex={selectionIndex}
+          isImageReady={isImageReady}
+          onToggleSelect={onToggle ? handleToggleSelect : undefined}
         />
       )}
     </motion.div>
