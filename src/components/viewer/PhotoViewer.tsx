@@ -11,7 +11,6 @@ import { TopBar } from './ui/TopBar';
 import { MobileBottomBar } from './ui/MobileBottomBar';
 import { InfoSheet } from './ui/InfoSheet';
 import { FilmStrip } from './ui/FilmStrip';
-import { FloatingSelectButton } from './ui/FloatingSelectButton';
 import {
   BackgroundLayer,
   LoadingState,

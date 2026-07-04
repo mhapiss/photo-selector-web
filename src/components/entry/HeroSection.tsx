@@ -16,7 +16,7 @@ export function HeroSection({ onScrollToForm, isMounted }: HeroSectionProps) {
 
   return (
     <section
-      className="relative z-10 flex min-h-[85dvh] flex-col items-center justify-center px-5 pb-10 pt-12 text-center sm:px-8"
+      className="relative z-10 flex min-h-[85dvh] flex-col items-center justify-center px-5 pb-24 pt-12 text-center sm:px-8 sm:pb-12"
       aria-label="Photo Selector"
     >
       <div className="absolute top-6 right-6 z-50">
