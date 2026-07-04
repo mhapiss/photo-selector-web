@@ -10,10 +10,10 @@ export function FooterSection() {
       aria-label="Kontak RanahTepi"
     >
       {/* Divider */}
-      <div className="mb-16 h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)' }} />
+      <div className="mb-16 h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, var(--color-border), transparent)' }} />
 
       <motion.div
-        className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-blue-500/10 p-8 backdrop-blur-sm sm:p-10"
+        className="relative overflow-hidden rounded-3xl border border-border bg-card/70 p-8 shadow-card backdrop-blur-xl sm:p-10"
         initial={{ opacity: 0, y: 40 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: '-60px' }}
@@ -31,29 +31,29 @@ export function FooterSection() {
           <div
             className="relative flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-full"
             style={{
-              background: 'linear-gradient(135deg, rgba(120,60,240,0.3), rgba(60,100,230,0.2))',
-              border: '2px solid rgba(139,92,246,0.35)',
-              boxShadow: '0 0 32px rgba(139,92,246,0.25)',
+              background: 'linear-gradient(135deg, rgba(255,107,138,0.18), rgba(141,217,255,0.22))',
+              border: '2px solid var(--color-border)',
+              boxShadow: '0 18px 42px rgba(229,169,61,0.12)',
             }}
             aria-hidden="true"
           >
-            <Camera size={32} style={{ color: '#a78bfa' }} strokeWidth={1.6} />
+            <Camera size={32} style={{ color: 'var(--color-primary)' }} strokeWidth={1.6} />
             {/* Online indicator */}
             <span
-              className="absolute bottom-1 right-1 h-3.5 w-3.5 rounded-full border-2 border-[#080810] bg-emerald-400"
+              className="absolute bottom-1 right-1 h-3.5 w-3.5 rounded-full border-2 border-card bg-emerald-400"
               aria-label="Online"
             />
           </div>
 
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-white/90">{BRAND.name}</h2>
-            <p className="mt-0.5 text-sm font-medium text-white/50">{BRAND.tagline}</p>
-            <p className="mt-1 text-sm text-white/40">{BRAND.services}</p>
+            <h2 className="text-2xl font-bold text-ink/88">{BRAND.name}</h2>
+            <p className="mt-0.5 text-sm font-semibold text-ink/55">{BRAND.tagline}</p>
+            <p className="mt-1 text-sm text-ink/48">{BRAND.services}</p>
             <div className="mt-2 flex items-center justify-center gap-1.5 sm:justify-start">
-              <MapPin size={12} className="text-white/25" aria-hidden="true" />
-              <span className="text-[12px] text-white/30">{BRAND.location}</span>
+              <MapPin size={12} className="text-primary-500/65" aria-hidden="true" />
+              <span className="text-[12px] font-medium text-ink/45">{BRAND.location}</span>
             </div>
-            <p className="mt-3 text-sm text-white/55">{BRAND.promo}</p>
+            <p className="mt-3 text-sm text-ink/58">{BRAND.promo}</p>
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -61,10 +61,10 @@ export function FooterSection() {
               href={`https://wa.me/${BRAND.whatsApp}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[13px] font-semibold text-black transition-all duration-200 active:scale-[0.97]"
+              className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[13px] font-bold text-white transition-all duration-200 active:scale-[0.97]"
               style={{
-                background: 'linear-gradient(135deg, #4ade80, #22c55e)',
-                boxShadow: '0 4px 20px rgba(74,222,128,0.3)',
+                background: 'linear-gradient(135deg, #E5A93D, #F2BA54)',
+                boxShadow: '0 14px 30px rgba(229,169,61,0.20)',
               }}
               aria-label="Hubungi via WhatsApp"
             >
@@ -76,7 +76,7 @@ export function FooterSection() {
               href={BRAND.instagram}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-6 py-3 text-[13px] font-medium text-white/55 transition-all duration-200 hover:bg-white/[0.09] hover:text-white/75"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-surface/60 px-6 py-3 text-[13px] font-bold text-ink/60 shadow-soft transition-all duration-200 hover:bg-card hover:text-ink"
               aria-label="Ikuti di Instagram"
             >
               <Instagram size={14} aria-hidden="true" />
@@ -88,14 +88,14 @@ export function FooterSection() {
 
       {/* Footer note */}
       <motion.p
-        className="mt-8 text-center text-[11px] text-white/15"
+        className="mt-8 text-center text-[11px] font-medium text-ink/35"
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
         viewport={{ once: true }}
         transition={{ delay: 0.5 }}
       >
         © {new Date().getFullYear()} RanahTepi Photography · Medan, Sumatera Utara ·{' '}
-        <a href={BRAND.instagram} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-white/30">
+        <a href={BRAND.instagram} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-ink/60">
           Instagram
         </a>
       </motion.p>

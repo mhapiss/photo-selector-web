@@ -215,15 +215,14 @@ export type PortfolioSlot = {
   aspectClass: string;
   label: string;
   src?: string;
+  thumb?: string;
 };
 
 export const PORTFOLIO_SLOTS: PortfolioSlot[] = [
-  { id: 'p1', span: 'col-span-2 row-span-2', aspectClass: 'aspect-square', label: 'Wedding 01' },
-  { id: 'p2', span: 'col-span-1 row-span-1', aspectClass: 'aspect-[4/3]', label: 'Prewedding 01' },
-  { id: 'p3', span: 'col-span-1 row-span-1', aspectClass: 'aspect-[4/3]', label: 'Couple 01' },
-  { id: 'p4', span: 'col-span-1 row-span-2', aspectClass: 'aspect-[3/4]', label: 'Portrait 01' },
-  { id: 'p5', span: 'col-span-2 row-span-1', aspectClass: 'aspect-[2/1]', label: 'Wedding 02' },
-  { id: 'p6', span: 'col-span-1 row-span-1', aspectClass: 'aspect-[4/3]', label: 'Engagement 01' },
+  { id: 'p1', span: 'col-span-2 row-span-2', aspectClass: 'aspect-portrait', label: 'Bride Portrait', src: '/portfolio/1.jpg', thumb: '/portfolio/thumb/1.webp' },
+  { id: 'p2', span: 'col-span-1 row-span-1', aspectClass: 'aspect-portrait', label: 'Bride Full', src: '/portfolio/2.jpg', thumb: '/portfolio/thumb/2.webp' },
+  { id: 'p3', span: 'col-span-1 row-span-1', aspectClass: 'aspect-portrait', label: 'Groom', src: '/portfolio/3.jpg', thumb: '/portfolio/thumb/3.webp' },
+  { id: 'p4', span: 'col-span-1 row-span-2', aspectClass: 'aspect-landscape', label: 'Moments', src: '/portfolio/4.jpg', thumb: '/portfolio/thumb/4.webp' },
 ];
 
 export const ORBS = [

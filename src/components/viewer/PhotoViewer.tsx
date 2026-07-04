@@ -1,54 +1,46 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { PhotoFile } from '../../types';
+import type { AlbumMeta, PhotoFile } from '../../types';
 
-// Hooks
 import { useImageLoader } from './hooks/useImageLoader';
 import { useAutoHideControls } from './hooks/useAutoHideControls';
 import { usePhotoViewerGestures } from './hooks/usePhotoViewerGestures';
 import { usePhotoViewerKeyboard } from './hooks/usePhotoViewerKeyboard';
 
-// UI Components
 import { TopBar } from './ui/TopBar';
 import { MobileBottomBar } from './ui/MobileBottomBar';
-import { DesktopZoomBar } from './ui/DesktopZoomBar';
 import { InfoSheet } from './ui/InfoSheet';
 import { FilmStrip } from './ui/FilmStrip';
+import { FloatingSelectButton } from './ui/FloatingSelectButton';
 import {
   BackgroundLayer,
   LoadingState,
   ErrorState,
   NavArrow,
-  FullResBadge
+  FullResBadge,
 } from './ui/States';
 
 export type PhotoViewerProps = {
   photos: PhotoFile[];
   index: number;
-  selected: boolean;
+  selected?: boolean;
   selectionIndex?: number | null;
   onClose: () => void;
   onNavigate: (newIndex: number) => void;
-  onToggle: (id: string) => void;
-};
-
-const springTransition = {
-  type: 'spring' as const,
-  stiffness: 280,
-  damping: 30,
-  mass: 0.8,
+  onToggle?: (id: string) => void;
+  meta?: AlbumMeta;
 };
 
 export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   photos,
   index,
-  selected,
+  selected = false,
   selectionIndex = null,
   onClose,
   onNavigate,
   onToggle,
+  meta,
 }) => {
-  // ── States ──
   const [rotation, setRotation] = useState(0);
   const [fullResMode, setFullResMode] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -56,13 +48,17 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   const [isLocked, setIsLocked] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const imageWrapperRef = useRef<HTMLDivElement>(null);
 
-  // ── Responsive detection ──
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
     window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    window.addEventListener('orientationchange', check);
+    return () => {
+      window.removeEventListener('resize', check);
+      window.removeEventListener('orientationchange', check);
+    };
   }, []);
 
   const photo = useMemo(() => photos[index], [photos, index]);
@@ -72,8 +68,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     return ids;
   }, [selected, photo]);
 
-  // ── Hooks Integration ──
-  const { imageUrl, isLoading, imageError, load, prefetch } = useImageLoader(photo, fullResMode);
+  const { imageUrl, naturalSize, isLoading, imageError, load, prefetch } = useImageLoader(photo, fullResMode);
   const { showControls, show: showCtrl, toggle: toggleCtrl } = useAutoHideControls(containerRef);
 
   const canPrev = index > 0;
@@ -104,7 +99,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     onTouchStart,
     onTouchMove,
     onTouchEnd,
-    swipeX
+    swipeX,
   } = usePhotoViewerGestures({
     isLocked,
     goPrev,
@@ -112,19 +107,21 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     canPrev,
     canNext,
     containerRef,
+    wrapperRef: imageWrapperRef,
     showCtrl,
     toggleCtrl,
-    index
+    index,
+    naturalSize,
   });
 
   const handleRotate = useCallback(() => {
-    setRotation(r => (r + 90) % 360);
+    setRotation((r) => (r + 90) % 360);
     showCtrl();
   }, [showCtrl]);
 
   const handleToggleFullRes = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setFullResMode(v => !v);
+    setFullResMode((v) => !v);
     showCtrl();
   }, [showCtrl]);
 
@@ -150,17 +147,22 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   }, []);
 
   const handleToggleLock = useCallback(() => {
-    setIsLocked(prev => !prev);
+    setIsLocked((prev) => !prev);
     showCtrl();
   }, [showCtrl]);
 
-  // Keyboard Navigation & Shortcuts
+  const handleToggleSelect = useCallback(() => {
+    if (!photo || !onToggle) return;
+    onToggle(photo.id);
+    showCtrl();
+  }, [onToggle, photo, showCtrl]);
+
   usePhotoViewerKeyboard({
     onClose,
     goPrev,
     goNext,
     onNavigate,
-    onToggle,
+    onToggle: onToggle || (() => {}),
     onRotate: handleRotate,
     onToggleFullscreen: toggleFullscreen,
     onToggleLock: handleToggleLock,
@@ -170,10 +172,9 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     photosLength: photos.length,
     currentIndex: index,
     activePhotoId: photo?.id,
-    isImageReady: !isLoading && !imageError && !!imageUrl
+    isImageReady: !isLoading && !imageError && !!imageUrl,
   });
 
-  // iOS Body Scroll Lock
   useEffect(() => {
     const scrollY = window.scrollY;
     const prevOverflow = document.body.style.overflow;
@@ -195,14 +196,12 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
     };
   }, []);
 
-  // Reset rotation and details when index changes
   useEffect(() => {
     setRotation(0);
     setFullResMode(false);
     setShowInfo(false);
   }, [index]);
 
-  // Prefetch neighboring images for seamless performance
   useEffect(() => {
     if (!photo) return;
     if (index > 0) prefetch(photos[index - 1]);
@@ -212,7 +211,7 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
   if (!photo) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#040406]">
-        <p className="text-white/30 text-sm">Foto tidak tersedia</p>
+        <p className="text-sm text-white/30">Foto tidak tersedia</p>
       </div>
     );
   }
@@ -224,6 +223,8 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
       ref={containerRef}
       className="fixed inset-0 z-[100] overflow-hidden select-none"
       style={{
+        height: '100dvh',
+        minHeight: '100svh',
         touchAction: 'none',
         background: '#040406',
         cursor: isDragging ? 'grabbing' : zoom > 1 && !isLocked ? 'grab' : 'default',
@@ -237,20 +238,15 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
       onPointerUp={onMouseUp}
       onPointerCancel={onMouseUp}
     >
-      {/* Background layer */}
       <BackgroundLayer darken={!showControls} />
 
-      {/* Top Bar with Center Counter */}
       <TopBar
         photo={photo}
         showControls={showControls}
         onClose={onClose}
-        selected={selected}
-        selectionIndex={selectionIndex}
-        onToggleSelect={() => onToggle(photo.id)}
         onRotate={handleRotate}
         onDownload={handleDownload}
-        onToggleInfo={() => setShowInfo(v => !v)}
+        onToggleInfo={() => setShowInfo((v) => !v)}
         onToggleFullscreen={toggleFullscreen}
         isImageReady={isImageReady}
         isMobile={isMobile}
@@ -258,9 +254,13 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         onToggleLock={handleToggleLock}
         currentIndex={index}
         totalCount={photos.length}
+        meta={meta}
+        selected={selected}
+        onToggleSelect={onToggle ? handleToggleSelect : undefined}
+        zoom={zoom}
+        onZoom={applyZoom}
       />
 
-      {/* Full-res Toggle Badge */}
       <FullResBadge
         show={showControls}
         active={fullResMode}
@@ -268,7 +268,6 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         isImageReady={isImageReady}
       />
 
-      {/* Info details sidebar/bottom-sheet */}
       <InfoSheet
         photo={photo}
         fullResMode={fullResMode}
@@ -277,25 +276,27 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         isMobile={isMobile}
       />
 
-      {/* Main viewport area */}
       <div
         className="absolute inset-0 flex items-center justify-center overflow-hidden"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {/* Loading Spinner */}
         {isLoading && <LoadingState thumbnailUrl={photo.thumbnailUrl} />}
+        {imageError && !isLoading && <ErrorState onRetry={load} />}
 
-        {/* Loading Error */}
-        {imageError && !isLoading && (
-          <ErrorState onRetry={load} />
-        )}
-
-        {/* Image element with transforms */}
         <motion.div
-          className="absolute inset-0 flex items-center justify-center"
-          style={{ x: swipeX }}
+          ref={imageWrapperRef}
+          className="absolute left-0 right-0 flex items-center justify-center"
+          animate={{
+            top: showControls ? 56 : 0,
+            bottom: showControls && !isMobile ? 72 : 0,
+          }}
+          style={{ 
+            x: swipeX,
+            paddingBottom: showControls && !isMobile ? 'env(safe-area-inset-bottom, 0px)' : 0
+          }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
         >
           <AnimatePresence mode="wait">
             {isImageReady && (
@@ -312,19 +313,15 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
                   height: 'auto',
                   objectFit: 'contain',
                   display: 'block',
-                  padding: isMobile
-                    ? 'max(env(safe-area-inset-top),56px) 8px max(env(safe-area-inset-bottom),110px) 8px'
-                    : '72px 80px 140px 80px', // padding accounts for topbar and filmstrip
+                  padding: 0,
                   boxSizing: 'border-box',
                   x: pan.x,
                   y: pan.y,
-                  scale: zoom,
-                  rotate: rotation,
                   WebkitBackfaceVisibility: 'hidden',
                   backfaceVisibility: 'hidden',
                 }}
-                initial={{ opacity: 0, filter: 'blur(12px)', scale: 0.98 }}
-                animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
+                initial={{ opacity: 0, filter: 'blur(12px)' }}
+                animate={{ opacity: 1, filter: 'blur(0px)', scale: zoom, rotate: rotation }}
                 exit={{ opacity: 0, filter: 'blur(6px)' }}
                 transition={{ duration: 0.3, ease: 'easeOut' }}
               />
@@ -333,7 +330,6 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         </motion.div>
       </div>
 
-      {/* FilmStrip component */}
       <FilmStrip
         photos={photos}
         currentIndex={index}
@@ -342,122 +338,41 @@ export const PhotoViewer: React.FC<PhotoViewerProps> = ({
         show={showControls && isImageReady}
       />
 
-      {/* Navigation arrows (Desktop only) */}
+      <FloatingSelectButton
+        show={showControls}
+        selected={selected}
+        selectionIndex={selectionIndex}
+        isImageReady={isImageReady}
+        isMobile={isMobile}
+        onToggleSelect={onToggle ? handleToggleSelect : undefined}
+      />
+
       <NavArrow
         direction="prev"
         show={showControls && isImageReady && canPrev}
-        onClick={(e) => { e.stopPropagation(); goPrev(); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          goPrev();
+        }}
       />
       <NavArrow
         direction="next"
         show={showControls && isImageReady && canNext}
-        onClick={(e) => { e.stopPropagation(); goNext(); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          goNext();
+        }}
       />
 
-      {/* Bottom Dock Zoom Bar (Mobile vs Desktop) */}
-      {isMobile ? (
+      {isMobile && (
         <MobileBottomBar
           show={showControls}
-          selected={selected}
-          selectionIndex={selectionIndex}
-          onToggleSelect={() => onToggle(photo.id)}
-          zoom={zoom}
-          isImageReady={isImageReady}
-          onZoomOut={() => applyZoom(zoom - 0.5)}
-          onZoomIn={() => applyZoom(zoom + 0.5)}
-          onResetZoom={() => applyZoom(1)}
-          canPrev={canPrev}
-          canNext={canNext}
-          onPrev={goPrev}
-          onNext={goNext}
-        />
-      ) : (
-        <DesktopZoomBar
-          show={showControls}
-          zoom={zoom}
-          isImageReady={isImageReady}
-          onZoomOut={() => applyZoom(zoom - 0.5)}
-          onZoomIn={() => applyZoom(zoom + 0.5)}
-          onResetZoom={() => applyZoom(1)}
           canPrev={canPrev}
           canNext={canNext}
           onPrev={goPrev}
           onNext={goNext}
         />
       )}
-
-      {/* ALWAYS VISIBLE PRIMARY SELECT PHOTO CTA (INSERTED BELOW ZOOM BAR) */}
-      <div
-        className="absolute left-1/2 -translate-x-1/2 z-40 pointer-events-auto w-[90%] sm:w-[340px]"
-        style={{
-          bottom: 'max(env(safe-area-inset-bottom), 12px)',
-        }}
-      >
-        <motion.button
-          onClick={() => onToggle(photo.id)}
-          className={`w-full h-12 flex items-center justify-center gap-2 rounded-full font-semibold text-sm transition-colors duration-200 border shadow-2xl focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-black ${
-            selected
-              ? 'bg-emerald-500 border-emerald-400/50 text-white shadow-emerald-500/20'
-              : 'border-white/10 text-white hover:bg-white/10'
-          }`}
-          style={selected ? {} : {
-            backdropFilter: 'blur(30px)',
-            WebkitBackdropFilter: 'blur(30px)',
-            background: 'rgba(255, 255, 255, 0.12)',
-          }}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.96 }}
-          transition={springTransition}
-          aria-label={selected ? 'Batalkan pilihan' : 'Pilih foto'}
-        >
-          <AnimatePresence mode="wait">
-            {selected ? (
-              <motion.div
-                key="checked"
-                className="flex items-center gap-2"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={springTransition}
-              >
-                <motion.svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  initial={{ scale: 0, rotate: -45 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={springTransition}
-                >
-                  <path d="M20 6 9 17l-5-5" />
-                </motion.svg>
-                <span>✓ Selected</span>
-                {typeof selectionIndex === 'number' && (
-                  <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white/20 text-[10px] font-bold font-mono">
-                    #{selectionIndex + 1}
-                  </span>
-                )}
-              </motion.div>
-            ) : (
-              <motion.div
-                key="unchecked"
-                className="flex items-center gap-2"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={springTransition}
-              >
-                <div className="w-3.5 h-3.5 rounded-full border-2 border-white/60" />
-                <span>Select Photo</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.button>
-      </div>
     </motion.div>
   );
 };

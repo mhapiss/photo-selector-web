@@ -13,6 +13,8 @@ export type PhotoFile = {
 
 export type AlbumMeta = {
   folderId: string;
+  photographerName: string;
+  photographerWhatsapp: string;
   eventName: string;
   clientName: string;
   folderLink: string;

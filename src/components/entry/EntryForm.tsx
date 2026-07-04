@@ -1,9 +1,13 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, CalendarDays, FolderOpen, ArrowRight, ShieldCheck, Sparkles, CheckCircle2 } from 'lucide-react';
+import {
+  CalendarDays, Camera, CheckCircle2, FolderOpen,
+  Phone, Send, ShieldCheck, User, ClipboardPaste,
+} from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { extractFolderId } from '../../services/driveService';
+import { loadSettings, saveSettings, getSession } from '../../services/storageService';
 import type { AlbumMeta } from '../../types';
 import { formVariants } from '../../utils/animations';
 
@@ -12,156 +16,195 @@ type EntryFormProps = {
 };
 
 export function EntryForm({ onSubmit }: EntryFormProps) {
-  const [clientName, setClientName] = useState('');
+  const [photographerName, setPhotographerName] = useState('');
+  const [photographerWhatsapp, setPhotographerWhatsapp] = useState('');
   const [eventName, setEventName] = useState('');
+  const [clientName, setClientName] = useState('');
   const [folderLink, setFolderLink] = useState('');
   const [linkError, setLinkError] = useState('');
   const [touched, setTouched] = useState(false);
 
+  // Settings sync
+  useEffect(() => {
+    const s = loadSettings();
+    if (s) {
+      if (s.photographerName) setPhotographerName(s.photographerName);
+      if (s.photographerWhatsapp) setPhotographerWhatsapp(s.photographerWhatsapp);
+    }
+  }, []);
+
   const folderId = extractFolderId(folderLink);
+
+  // Detect existing session
+  const [existingCount, setExistingCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (folderId) {
+      const sess = getSession(folderId);
+      if (sess) {
+        setExistingCount(sess.selectionOrder.length);
+        if (sess.meta.clientName) setClientName(sess.meta.clientName);
+        if (sess.meta.eventName) setEventName(sess.meta.eventName);
+      } else {
+        setExistingCount(null);
+      }
+    } else {
+      setExistingCount(null);
+    }
+  }, [folderId]);
+
   const linkInvalid = touched && folderLink.length > 0 && !folderId;
-  const formValid = !!clientName.trim() && !!eventName.trim() && !!folderId;
+  const phoneDigits = photographerWhatsapp.replace(/[^0-9]/g, '');
+  const phoneInvalid = touched && photographerWhatsapp.length > 0 && phoneDigits.length < 9;
+  const formValid =
+    Boolean(photographerName.trim()) &&
+    phoneDigits.length >= 9 &&
+    Boolean(eventName.trim()) &&
+    Boolean(clientName.trim()) &&
+    Boolean(folderId);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setTouched(true);
-    if (!folderId) {
-      setLinkError('Tempel link folder Google Drive yang valid.');
+    if (!folderLink.trim().startsWith('https://')) {
+      setLinkError('Hanya link HTTPS yang diperbolehkan.');
       return;
     }
-    if (!clientName.trim() || !eventName.trim()) return;
-    
+    if (!folderId) { setLinkError('Tempel link folder Google Drive yang valid.'); return; }
+    if (!formValid) return;
+
+    saveSettings({
+      photographerName: photographerName.trim(),
+      photographerWhatsapp: photographerWhatsapp.trim(),
+    });
+
     onSubmit({
-      clientName: clientName.trim(),
+      photographerName: photographerName.trim(),
+      photographerWhatsapp: photographerWhatsapp.trim(),
       eventName: eventName.trim(),
+      clientName: clientName.trim(),
       folderLink: folderLink.trim(),
       folderId,
     });
   }
 
-  return (
-    <motion.div className="order-1 lg:order-2" variants={formVariants}>
-      <motion.form
-        onSubmit={handleSubmit}
-        aria-label="Formulir detail album foto"
-        className="relative overflow-hidden rounded-3xl p-5 sm:p-8"
-        style={{
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.10)',
-          backdropFilter: 'blur(24px)',
-          boxShadow:
-            '0 4px 24px rgba(0,0,0,0.4), 0 24px 64px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
-        }}
-        whileHover={{
-          boxShadow:
-            '0 4px 24px rgba(0,0,0,0.5), 0 32px 80px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.12), inset 0 1px 0 rgba(255,255,255,0.1)',
-          transition: { duration: 0.3 },
-        }}
-      >
-        <div
-          className="pointer-events-none absolute left-0 right-0 top-0 h-px"
-          aria-hidden="true"
-          style={{
-            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
-          }}
-        />
+  async function handlePaste() {
+    try {
+      const text = await navigator.clipboard.readText();
+      setFolderLink(text);
+      if (linkError) setLinkError('');
+    } catch (err) {
+      console.error('Failed to read clipboard contents:', err);
+      setLinkError('Gagal membaca clipboard. Coba paste manual (Ctrl+V).');
+    }
+  }
 
-        <div className="mb-6 flex items-center gap-3 sm:mb-7">
-          <motion.div
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl"
-            style={{
-              background: 'linear-gradient(135deg, rgba(140,60,240,0.4) 0%, rgba(80,120,230,0.3) 100%)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              boxShadow: '0 0 12px rgba(120,40,200,0.3)',
-            }}
-            animate={{
-              boxShadow: [
-                '0 0 12px rgba(120,40,200,0.3)',
-                '0 0 22px rgba(120,40,200,0.55)',
-                '0 0 12px rgba(120,40,200,0.3)',
-              ],
-            }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-            aria-hidden="true"
-          >
-            <Sparkles size={14} className="text-white/80" strokeWidth={2} />
-          </motion.div>
-          <div>
-            <h2 className="text-[14px] font-semibold tracking-tight text-white/90 sm:text-[15px]">
-              Detail Album
-            </h2>
-            <p className="text-[11px] text-white/35">Isi info berikut untuk memulai</p>
-          </div>
+  return (
+    <motion.div className="order-1 lg:order-2 relative" variants={formVariants}>
+      {/* Outer Glow */}
+      <div className="absolute -inset-4 rounded-[32px] bg-primary/20 blur-[64px] opacity-30 pointer-events-none" />
+      
+      <form
+        onSubmit={handleSubmit}
+        aria-label="Formulir pembuatan galeri"
+        className="relative rounded-[24px] border border-border/50 bg-surface/60 p-6 sm:p-8 backdrop-blur-3xl shadow-2xl transition-all duration-500 hover:shadow-primary/5 hover:border-border/80 overflow-hidden group"
+        style={{ boxShadow: '0 32px 64px -16px rgba(0,0,0,0.3)' }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] to-transparent pointer-events-none" />
+        <div className="absolute -inset-px rounded-[24px] opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none bg-gradient-to-br from-primary/10 via-transparent to-transparent" />
+        
+        {/* Header */}
+        <div className="relative mb-6 z-10">
+          <h2 className="text-[17px] font-bold text-ink tracking-tight">Buat Galeri Klien</h2>
+          <p className="mt-0.5 text-[12px] text-muted">
+            Tanpa login · tanpa upload · langsung dari Google Drive
+          </p>
         </div>
 
         <div className="space-y-4">
-          <div className="group relative">
+          <div className="grid gap-3.5 sm:grid-cols-2">
+            <Input
+              label="Nama Fotografer"
+              leftIcon={<Camera size={15} />}
+              placeholder="isi nama fotografer"
+              value={photographerName}
+              onChange={(e) => setPhotographerName(e.target.value)}
+              autoComplete="name"
+              maxLength={70}
+              required
+            />
+            <Input
+              label="WhatsApp Fotografer"
+              leftIcon={<Phone size={15} />}
+              placeholder="di mulai dari 62"
+              value={photographerWhatsapp}
+              onChange={(e) => setPhotographerWhatsapp(e.target.value)}
+              onBlur={() => setTouched(true)}
+              error={phoneInvalid ? 'Masukkan nomor WhatsApp dengan kode negara.' : undefined}
+              inputMode="tel"
+              autoComplete="tel"
+              required
+            />
+          </div>
+
+          <div className="grid gap-3.5 sm:grid-cols-2">
+            <Input
+              label="Nama Acara"
+              leftIcon={<CalendarDays size={15} />}
+              placeholder="Isi nama acara"
+              value={eventName}
+              onChange={(e) => setEventName(e.target.value)}
+              maxLength={90}
+              required
+            />
             <Input
               label="Nama Klien"
-              leftIcon={
-                <User size={16} className="text-white/40 transition-colors group-focus-within:text-white/70" aria-hidden="true" />
-              }
-              placeholder="Nama Client"
+              leftIcon={<User size={15} />}
+              placeholder="Isi nama kamu"
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
               autoComplete="name"
-              maxLength={60}
+              maxLength={70}
+              required
             />
           </div>
 
-          <div className="group relative">
-            <Input
-              label="Nama Acara"
-              leftIcon={
-                <CalendarDays size={16} className="text-white/40 transition-colors group-focus-within:text-white/70" aria-hidden="true" />
-              }
-              placeholder="Nama Acara & Tanggal"
-              value={eventName}
-              onChange={(e) => setEventName(e.target.value)}
-              maxLength={80}
-            />
-          </div>
-
-          <div className="group relative">
+          <div>
             <Input
               label="Link Folder Google Drive"
-              leftIcon={
-                <FolderOpen size={16} className="text-white/40 transition-colors group-focus-within:text-white/70" aria-hidden="true" />
-              }
-              placeholder="Link Google Drive"
+              leftIcon={<FolderOpen size={15} />}
+              placeholder="paste link google drive dari fotografer"
               value={folderLink}
-              onChange={(e) => {
-                setFolderLink(e.target.value);
-                if (linkError) setLinkError('');
-              }}
+              onChange={(e) => { setFolderLink(e.target.value); if (linkError) setLinkError(''); }}
               onBlur={() => setTouched(true)}
-              error={
-                linkInvalid
-                  ? linkError || 'Tempel link folder Google Drive yang valid.'
-                  : undefined
-              }
-              hint={
-                !linkInvalid
-                  ? 'Tempel link "Bagikan" dari folder Google Drive-mu.'
-                  : undefined
-              }
+              error={linkInvalid ? linkError || 'Link tidak valid.' : undefined}
+              hint={!linkInvalid ? 'Foto dibaca langsung dari Drive. Tidak ada upload.' : undefined}
               inputMode="url"
               autoComplete="url"
+              required
+              rightElement={
+                <button
+                  type="button"
+                  onClick={handlePaste}
+                  className="flex items-center gap-1.5 rounded-lg bg-surface hover:bg-surface-hover px-2.5 py-1.5 border border-border/80 text-[11px] font-semibold text-ink transition-colors hover:border-primary/50"
+                  aria-label="Paste Link"
+                >
+                  <ClipboardPaste size={12} className="text-primary" />
+                  Paste
+                </button>
+              }
             />
             <AnimatePresence>
               {folderId && !linkInvalid && (
                 <motion.div
                   className="mt-2 flex items-center gap-1.5"
-                  role="status"
-                  aria-live="polite"
-                  initial={{ opacity: 0, y: -6, height: 0 }}
-                  animate={{ opacity: 1, y: 0, height: 'auto' }}
-                  exit={{ opacity: 0, y: -6, height: 0 }}
-                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.18 }}
                 >
-                  <CheckCircle2 size={13} className="text-emerald-400" aria-hidden="true" />
-                  <span className="text-[12px] font-medium text-emerald-400">
-                    Folder terdeteksi — siap dibuka
+                  <CheckCircle2 size={12} className="text-success" />
+                  <span className="text-[12px] font-medium text-success">
+                    Folder terdeteksi
                   </span>
                 </motion.div>
               )}
@@ -169,46 +212,25 @@ export function EntryForm({ onSubmit }: EntryFormProps) {
           </div>
         </div>
 
-        <motion.div className="mt-5 sm:mt-6" whileTap={{ scale: 0.985 }}>
+        <div className="mt-5">
           <Button
             type="submit"
             size="lg"
             fullWidth
-            rightIcon={
-              <motion.span
-                aria-hidden="true"
-                animate={formValid ? { x: [0, 3, 0] } : {}}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <ArrowRight size={18} strokeWidth={2} />
-              </motion.span>
-            }
+            rightIcon={<Send size={16} strokeWidth={2} />}
             disabled={!formValid}
           >
-            Buka Album
+            {existingCount !== null ? `Lanjutkan Pilihan (${existingCount} foto)` : 'Buka Galeri'}
           </Button>
-        </motion.div>
+        </div>
 
-        <motion.p
-          className="mt-4 flex items-center justify-center gap-1.5 sm:mt-5"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-        >
-          <ShieldCheck size={13} className="text-white/20" strokeWidth={1.8} aria-hidden="true" />
-          <span className="text-[11px] text-white/20">
-            Link-mu hanya digunakan untuk memuat pratinjau foto.
+        <p className="mt-3.5 flex items-center justify-center gap-1.5">
+          <ShieldCheck size={12} className="text-dim" strokeWidth={1.8} />
+          <span className="text-[11px] text-muted">
+            Google Drive tetap jadi sumber foto utama.
           </span>
-        </motion.p>
-
-        <div
-          className="pointer-events-none absolute bottom-0 left-0 right-0 h-px"
-          aria-hidden="true"
-          style={{
-            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)',
-          }}
-        />
-      </motion.form>
+        </p>
+      </form>
     </motion.div>
   );
 }

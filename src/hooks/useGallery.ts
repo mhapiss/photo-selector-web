@@ -18,11 +18,15 @@ export function useGallery(
     onPhotosLoadedRef.current = onPhotosLoaded;
   }, [onPhotosLoaded]);
 
-  const load = useCallback(async () => {
+  const loadRef = useRef<() => void>(() => {});
+
+  const load = useCallback(async (cancelledRef?: { current: boolean }) => {
     setLoadState('loading');
     setLoadError(null);
 
     const result = await fetchDrivePhotos(folderId);
+
+    if (cancelledRef?.current) return;
 
     if (result.ok) {
       setPhotos(result.photos);
@@ -35,7 +39,9 @@ export function useGallery(
   }, [folderId]);
 
   useEffect(() => {
-    load();
+    const cancelledRef = { current: false };
+    load(cancelledRef);
+    return () => { cancelledRef.current = true; };
   }, [load]);
 
   useEffect(() => {

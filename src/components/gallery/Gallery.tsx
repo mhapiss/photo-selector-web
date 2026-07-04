@@ -11,7 +11,7 @@ import {
 } from '../../hooks/useVirtualGrid';
 import type { LoadError, LoadState, PhotoFile } from '../../types';
 
-const GAP = 8;
+const GAP = 12;
 const ASPECT_RATIO = 1;
 const MAX_AUTO_RETRIES = 3;
 const AUTO_RETRY_DELAY = 3000; // 3 detik
@@ -41,7 +41,7 @@ export function Gallery({
 }: GalleryProps) {
   const [query, setQuery] = useState('');
   const [autoRetryCount, setAutoRetryCount] = useState(0);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sortedPhotos = useMemo(
     () => [...photos].sort((a, b) => naturalSort(a.name, b.name)),
@@ -139,8 +139,8 @@ export function Gallery({
 
   if (loadState === 'loading') {
     return (
-      <div className="px-4 py-4">
-        <div className="mb-4 h-11 w-full max-w-xs rounded-xl skeleton" />
+      <div className="px-2 py-4 sm:px-4">
+        <div className="mb-4 h-14 w-full max-w-md rounded-3xl skeleton" />
         <SkeletonGrid count={12} />
       </div>
     );
@@ -157,23 +157,19 @@ export function Gallery({
         transition={{ duration: 0.4, ease: 'easeOut' }}
       >
         <motion.div
-          className="mb-5 grid h-16 w-16 place-items-center rounded-2xl"
-          style={{
-            background: 'rgba(239,68,68,0.1)',
-            border: '1px solid rgba(239,68,68,0.2)',
-          }}
+          className="mb-5 grid h-16 w-16 place-items-center rounded-2xl bg-danger/10 border border-danger/20 text-danger shadow-sm"
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.35, ease: 'easeOut' }}
         >
-          <ImageOff size={28} className="text-red-400" strokeWidth={1.8} />
+          <ImageOff size={28} strokeWidth={1.8} />
         </motion.div>
 
-        <h3 className="text-base font-bold text-white/90 sm:text-lg">
+        <h3 className="text-base font-bold text-ink sm:text-lg">
           {isAutoRetrying ? 'Mencoba ulang...' : 'Album gagal dimuat'}
         </h3>
 
-        <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/45">
+        <p className="mt-2 max-w-sm text-sm leading-relaxed text-ink/55">
           {isAutoRetrying
             ? `Percobaan ulang otomatis (${autoRetryCount + 1}/${MAX_AUTO_RETRIES})...`
             : loadError?.message ?? 'Terjadi kesalahan yang tidak terduga. Coba lagi.'}
@@ -181,7 +177,7 @@ export function Gallery({
 
         {isAutoRetrying && (
           <motion.div
-            className="mt-4 flex items-center gap-2 text-sm text-white/40"
+            className="mt-4 flex items-center gap-2 text-sm font-medium text-ink/45"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
@@ -196,18 +192,8 @@ export function Gallery({
             {loadError?.code === 'api-key-missing' && (
               <motion.button
                 onClick={onManualPaste}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white"
-                style={{
-                  background:
-                    'linear-gradient(135deg, rgba(140,60,240,0.9) 0%, rgba(80,120,240,0.9) 100%)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  boxShadow: '0 0 16px rgba(120,40,200,0.3)',
-                }}
-                whileHover={{
-                  scale: 1.03,
-                  boxShadow: '0 0 24px rgba(120,40,200,0.45)',
-                }}
-                whileTap={{ scale: 0.96 }}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white bg-primary hover:brightness-105 active:brightness-95 shadow-sm shadow-btn border border-black/10 dark:border-white/10 transition-all focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+                whileTap={{ scale: 0.97 }}
                 transition={{ duration: 0.15 }}
               >
                 Tempel nama file manual
@@ -219,14 +205,8 @@ export function Gallery({
                 setAutoRetryCount(0);
                 onRetry();
               }}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white/80"
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                backdropFilter: 'blur(12px)',
-              }}
-              whileHover={{ background: 'rgba(255,255,255,0.1)', scale: 1.03 }}
-              whileTap={{ scale: 0.96 }}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-ink bg-surface border border-border shadow-xs hover:bg-card active:brightness-95 transition-all focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+              whileTap={{ scale: 0.97 }}
               transition={{ duration: 0.15 }}
             >
               <RefreshCw size={15} strokeWidth={2} />
@@ -241,7 +221,7 @@ export function Gallery({
   return (
     <div className="px-3 py-3 pb-28 sm:px-4 sm:py-4 sm:pb-32">
       <motion.div
-        className="mb-4 max-w-md"
+        className="mb-5 max-w-md"
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: 'easeOut' }}
@@ -263,20 +243,14 @@ export function Gallery({
             exit={{ opacity: 0, scale: 0.97 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
           >
-            <div
-              className="mb-4 grid h-14 w-14 place-items-center rounded-2xl"
-              style={{
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.08)',
-              }}
-            >
-              <Search size={22} className="text-white/30" strokeWidth={1.8} />
+            <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 border border-primary/20 text-primary shadow-sm">
+              <Search size={24} strokeWidth={2} />
             </div>
 
-            <p className="text-[15px] font-semibold text-white/70">
+            <p className="text-[15px] font-semibold text-ink">
               Foto tidak ditemukan
             </p>
-            <p className="mt-1.5 text-sm text-white/35">
+            <p className="mt-1.5 text-sm text-ink/48">
               Coba kata kunci pencarian yang berbeda.
             </p>
           </motion.div>

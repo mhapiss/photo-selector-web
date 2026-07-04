@@ -3,29 +3,46 @@ import type { AlbumMeta } from '../types';
 /**
  * Builds a professional pre-filled WhatsApp message.
  */
-export function buildWhatsAppMessage(meta: AlbumMeta, filenames: string[]): string {
+export function buildWhatsAppMessage(meta: AlbumMeta, filenames: string[]): { shortMessage: string; fullMessage: string } {
+  const safePhotographerName = meta.photographerName.trim() || 'Fotografer';
+  const safeClientName = meta.clientName.trim() || '-';
   const safeEventName = meta.eventName.trim() || '-';
 
-  const formattedFiles =
-    filenames.length > 0
-      ? filenames.map((name, index) => `${index + 1}. ${name}`)
-      : ['- Belum ada foto yang dipilih'];
+  const baseHeader = [
+    `Halo ${safePhotographerName} 👋`,
+    '',
+    'Saya sudah selesai memilih foto.',
+    '',
+    '━━━━━━━━━━━━━━━━━━',
+    '',
+    `Nama Client : ${safeClientName}`,
+    '',
+    `Acara : ${safeEventName}`,
+    '',
+    `Total Dipilih : ${filenames.length} Foto`,
+    '',
+    '━━━━━━━━━━━━━━━━━━',
+    '',
+  ];
 
-  return [
-    'Halo Kak,',
+  const baseFooter = [
     '',
-    'Saya ingin mengirimkan daftar foto yang telah saya pilih.',
+    'Terima kasih 🙏',
     '',
-    `Nama Acara: ${safeEventName}`,
-    '',
-    'Foto Terpilih:',
-    ...formattedFiles,
-    '',
-    `Total Foto Terpilih: ${filenames.length}`,
-    '',
-    'Mohon dibantu untuk proses selanjutnya.',
-    'Terima kasih banyak.',
-  ].join('\n');
+    'Powered by Photo Selector',
+  ];
+
+  const fullFiles = filenames.length > 0 ? filenames : ['-'];
+  
+  const shortLimit = 20;
+  const shortFiles = filenames.length > shortLimit 
+    ? [...filenames.slice(0, shortLimit), '', `... dan ${filenames.length - shortLimit} foto lainnya. (Daftar lengkap bisa di-copy dari web)`] 
+    : fullFiles;
+
+  return {
+    shortMessage: [...baseHeader, ...shortFiles, ...baseFooter].join('\n'),
+    fullMessage: [...baseHeader, ...fullFiles, ...baseFooter].join('\n')
+  };
 }
 
 /**

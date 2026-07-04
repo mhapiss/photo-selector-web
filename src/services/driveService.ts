@@ -30,16 +30,30 @@ export function extractFolderId(link: string): string | null {
   return null;
 }
 
+/**
+ * Wraps a URL with the wsrv.nl image proxy CDN for automatic WebP compression,
+ * caching (to avoid Google Drive 429 rate limits), and resizing.
+ */
+export function optimizeImageUrl(url: string, width: number): string {
+  // Remove protocol, wsrv.nl handles domain directly or encoded
+  const cleanUrl = url.replace(/^https?:\/\//, '');
+  // output=webp, w=width, we=animated webp for gifs, il=interlaced
+  return `https://wsrv.nl/?url=${encodeURIComponent(cleanUrl)}&w=${width}&output=webp&we&il`;
+}
+
 export function driveThumbUrl(fileId: string, size = 250): string {
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}`;
+  const source = `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}`;
+  return optimizeImageUrl(source, size);
 }
 
 export function driveMediumUrl(fileId: string): string {
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+  const source = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+  return optimizeImageUrl(source, 1000);
 }
 
 export function driveLargeUrl(fileId: string): string {
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1600`;
+  const source = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1600`;
+  return optimizeImageUrl(source, 1600);
 }
 
 export function driveFileUrl(fileId: string): string {
@@ -103,20 +117,28 @@ function normalizePhotoFile(rawFile: unknown): PhotoFile | null {
   } else if (isValidHttpUrl(file.iconLink)) {
     thumbnailUrl = file.iconLink.trim();
   } else {
-    thumbnailUrl = `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w400`;
+    thumbnailUrl = `https://drive.google.com/thumbnail?id=${id}&sz=w600`;
   }
 
-  const directUrl = file.webContentLink || 
-                    file.webViewLink || 
-                    `https://drive.google.com/uc?id=${id}&export=download`;
+  // If it's an lh3.googleusercontent.com link, we can resize it by changing the =s parameter
+  if (thumbnailUrl.includes('lh3.googleusercontent.com')) {
+    thumbnailUrl = thumbnailUrl.replace(/=s\d+/, '=w600');
+  }
+
+  const originalDirectUrl = file.webContentLink || 
+                            file.webViewLink || 
+                            `https://drive.google.com/uc?id=${id}&export=download`;
 
   return {
     id,
     name,
     mimeType: file.mimeType || 'image/jpeg',
-    thumbnailUrl,
-    directUrl,
-    webContentLink: directUrl,
+    // DO NOT wrap thumbnailUrl in wsrv.nl if it's already an lh3 CDN link (it breaks it and lh3 doesn't have 429 limits)
+    thumbnailUrl: thumbnailUrl.includes('lh3.googleusercontent.com') ? thumbnailUrl : optimizeImageUrl(thumbnailUrl, 600),
+    // Optimize direct URL for full-screen viewer (2000px max width) via wsrv.nl
+    directUrl: optimizeImageUrl(originalDirectUrl, 2000),
+    // Keep original for native downloads if needed
+    webContentLink: originalDirectUrl,
     size: file.size || 0,
     _raw: file,
   };

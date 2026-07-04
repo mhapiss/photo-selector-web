@@ -6,6 +6,8 @@
  * large  = zoom
  */
 
+const MAX_CACHE_SIZE = 50;
+
 const imageCache = new Map<
   string,
   HTMLImageElement
@@ -73,6 +75,11 @@ export function preloadImage(
           'eager';
 
         img.onload = () => {
+          if (imageCache.size >= MAX_CACHE_SIZE) {
+            const firstKey = imageCache.keys().next().value;
+            if (firstKey) imageCache.delete(firstKey);
+          }
+
           imageCache.set(
             url,
             img

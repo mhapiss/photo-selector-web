@@ -52,6 +52,7 @@ export function LazyImage({
   }, [src]);
 
   const handleLoad = useCallback(() => {
+    if (loadedImages.size > 200) loadedImages.clear();
     loadedImages.add(src);
 
     setLoaded(true);

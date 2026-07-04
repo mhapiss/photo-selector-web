@@ -1,90 +1,50 @@
 import { motion } from 'framer-motion';
-import { ImageIcon } from 'lucide-react';
 import { HOW_STEPS } from '../../config/constants';
 import { itemVariants } from '../../utils/animations';
 import { SectionLabel } from './SectionLabel';
 
 export function HowItWorksSection() {
   return (
-    <motion.div variants={itemVariants} className="order-2 lg:order-1" aria-label="Cara kerja Photo Selector">
+    <motion.div variants={itemVariants} className="order-2 lg:order-1" aria-label="Cara kerja">
       <SectionLabel>Cara Kerja</SectionLabel>
 
-      <ol className="mt-5 flex flex-col gap-3" role="list">
+      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
         {HOW_STEPS.map((item, index) => {
           const Icon = item.icon;
+          // Custom spans for bento box feel (make the last one span 2 columns if there are 3 items)
+          const isLastAndOdd = index === HOW_STEPS.length - 1 && HOW_STEPS.length % 2 !== 0;
+          
           return (
-            <motion.li
+            <motion.div
               key={item.step}
-              className="group relative overflow-hidden rounded-2xl p-4 sm:p-5"
-              style={{
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.07)',
-                backdropFilter: 'blur(12px)',
-              }}
-              initial={{ opacity: 0, x: -24 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 + index * 0.1, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              whileHover={{
-                background: 'rgba(255,255,255,0.055)',
-                scale: 1.01,
-                transition: { duration: 0.2 },
-              }}
+              whileHover={{ y: -4, scale: 1.01 }}
+              transition={{ duration: 0.2 }}
+              className={`group relative overflow-hidden rounded-3xl border border-border/60 bg-surface/40 p-6 backdrop-blur-md transition-colors hover:bg-surface/80 hover:border-border ${isLastAndOdd ? 'sm:col-span-2' : ''}`}
             >
-              <div
-                className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${item.color} opacity-0 transition-opacity duration-300 group-hover:opacity-100`}
-                aria-hidden="true"
-              />
-              <div className="relative flex items-start gap-4">
-                <div
-                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
-                  style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                  }}
-                  aria-hidden="true"
-                >
-                  <Icon size={17} className="text-white/60" strokeWidth={1.8} />
-                </div>
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <div className="mb-1 flex items-center gap-2.5">
-                    <span
-                      className="font-mono text-[10px] font-semibold tracking-widest"
-                      style={{ color: 'rgba(160,130,255,0.7)' }}
-                      aria-hidden="true"
-                    >
-                      {item.step}
-                    </span>
-                    <h3 className="text-[13px] font-semibold text-white/85 sm:text-sm">
-                      {item.title}
-                    </h3>
+              {/* Subtle background glow */}
+              <div className={`absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gradient-to-br ${item.color} blur-[32px] opacity-40 group-hover:opacity-80 transition-opacity duration-500`} />
+              
+              <div className="relative z-10 flex flex-col h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-background border border-border shadow-sm">
+                    <Icon size={20} className="text-primary" strokeWidth={2} />
                   </div>
-                  <p className="text-[12px] leading-relaxed text-white/40 sm:text-[13px]">
-                    {item.desc}
-                  </p>
+                  <span className="text-[28px] font-black text-ink/5 tracking-tighter">
+                    {item.step}
+                  </span>
                 </div>
+                
+                <h3 className="text-[17px] font-bold text-ink mb-2">{item.title}</h3>
+                <p className="text-[13.5px] leading-relaxed text-muted/90 flex-grow">{item.desc}</p>
               </div>
-            </motion.li>
+            </motion.div>
           );
         })}
-      </ol>
+      </div>
 
-      <motion.p
-        className="mt-5 flex w-fit items-center gap-2 rounded-full px-4 py-2.5"
-        style={{
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.06)',
-        }}
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true }}
-        transition={{ delay: 0.6 }}
-      >
-        <ImageIcon size={12} className="text-white/30" strokeWidth={1.8} aria-hidden="true" />
-        <span className="text-[11px] text-white/30 sm:text-[12px]">
-          Dipercaya fotografer di seluruh Indonesia
-        </span>
-      </motion.p>
+      <p className="mt-6 text-[12px] text-muted/60 text-center font-medium tracking-wide uppercase">
+        Dipercaya ratusan fotografer di seluruh Indonesia
+      </p>
     </motion.div>
   );
 }

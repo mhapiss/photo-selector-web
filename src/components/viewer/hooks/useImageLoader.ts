@@ -13,37 +13,32 @@ function extractDriveFileId(url: string): string | null {
 
 function buildImageUrls(photo: PhotoFile, fullRes: boolean): string[] {
   const urls: string[] = [];
+  
+  if (fullRes && photo.directUrl) {
+    urls.push(photo.directUrl); // 2000px via wsrv CDN
+  }
+
   const id =
     photo.id ||
     extractDriveFileId(photo.directUrl || '') ||
     extractDriveFileId(photo.thumbnailUrl || '');
+    
   if (id) {
-    if (fullRes) {
-      urls.push(`https://drive.google.com/thumbnail?id=${id}&sz=s0`);
-      urls.push(driveLargeUrl(id));
-      urls.push(driveMediumUrl(id));
-    } else {
-      urls.push(driveLargeUrl(id));
-      urls.push(driveMediumUrl(id));
-      urls.push(driveThumbUrl(id, 800));
-    }
-    urls.push(`https://lh3.googleusercontent.com/d/${id}=s1600`);
-    urls.push(`https://lh3.googleusercontent.com/d/${id}=s0`);
+    urls.push(driveLargeUrl(id)); // 1600px via wsrv CDN
+    urls.push(driveMediumUrl(id)); // 1000px via wsrv CDN
+    urls.push(driveThumbUrl(id, 800)); // 800px via wsrv CDN
   }
+  
   if (photo.thumbnailUrl && !photo.thumbnailUrl.includes('/file/d/')) {
     urls.push(photo.thumbnailUrl);
   }
-  if (photo.webContentLink) {
-    urls.push(photo.webContentLink);
-  }
-  if (photo.directUrl && !photo.directUrl.includes('/file/d/')) {
-    urls.push(photo.directUrl);
-  }
+  
   return [...new Set(urls.filter(Boolean))];
 }
 
 export function useImageLoader(photo: PhotoFile | undefined, fullRes: boolean) {
   const [imageUrl, setImageUrl] = useState('');
+  const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
 
@@ -55,36 +50,67 @@ export function useImageLoader(photo: PhotoFile | undefined, fullRes: boolean) {
     setIsLoading(true);
     setImageError(false);
     setImageUrl('');
+    setNaturalSize({ w: 0, h: 0 });
 
     let attempt = 0;
     let cancelled = false;
+    let activeImg: HTMLImageElement | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanupActive = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (activeImg) {
+        activeImg.onload = null;
+        activeImg.onerror = null;
+        activeImg.src = ''; // Cancel HTTP download immediately
+        activeImg = null;
+      }
+    };
 
     const tryNext = () => {
-      if (cancelled || attempt >= urls.length) {
-        if (!cancelled) { setImageError(true); setIsLoading(false); }
+      cleanupActive();
+      
+      if (cancelled) return;
+      if (attempt >= urls.length) {
+        setImageError(true);
+        setIsLoading(false);
         return;
       }
+      
       const url = urls[attempt++];
       const img = new Image();
+      activeImg = img;
       img.referrerPolicy = 'no-referrer';
+      
       img.onload = () => {
-        if (!cancelled) { setImageUrl(url); setIsLoading(false); setImageError(false); }
+        if (!cancelled) {
+          setImageUrl(url);
+          setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+          setIsLoading(false);
+          setImageError(false);
+        }
       };
+      
       img.onerror = () => {
         if (!cancelled) tryNext();
       };
+      
       img.src = url;
-      setTimeout(() => {
+      
+      // Timeout fallback (wait 6s instead of 8s, then try next if stalled)
+      timeoutId = setTimeout(() => {
         if (!cancelled && !img.complete) {
-          img.onload = null;
-          img.onerror = null;
           tryNext();
         }
-      }, 8000);
+      }, 6000);
     };
 
     tryNext();
-    return () => { cancelled = true; };
+    
+    return () => {
+      cancelled = true;
+      cleanupActive();
+    };
   }, [photo, fullRes]);
 
   useEffect(() => { const cleanup = load(); return cleanup; }, [load]);
@@ -98,5 +124,5 @@ export function useImageLoader(photo: PhotoFile | undefined, fullRes: boolean) {
     }
   }, []);
 
-  return { imageUrl, isLoading, imageError, load, prefetch };
+  return { imageUrl, naturalSize, isLoading, imageError, load, prefetch };
 }

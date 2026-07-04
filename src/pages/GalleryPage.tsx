@@ -1,17 +1,17 @@
 import { useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GalleryHeader } from './GalleryHeader';
-import { Gallery } from './Gallery';
-import PhotoViewer from '../viewer/PhotoViewer';
-import { ManualPasteModal } from './ManualPasteModal';
-import { SelectionBar } from './SelectionBar';
-import { recordSelection } from '../../services/trackingService';
-import type { AlbumMeta, PhotoFile } from '../../types';
-import { useGallery } from '../../hooks/useGallery';
-import { BackgroundLayer } from './BackgroundLayer';
-import { GallerySurface } from './GallerySurface';
+import { GalleryHeader } from '../components/gallery/GalleryHeader';
+import { Gallery } from '../components/gallery/Gallery';
+import PhotoViewer from '../components/viewer/PhotoViewer';
+import { ManualPasteModal } from '../components/gallery/ManualPasteModal';
+import { SelectionBar } from '../components/gallery/SelectionBar';
+import { recordSelection } from '../services/trackingService';
+import type { AlbumMeta, PhotoFile } from '../types';
+import { useGallery } from '../hooks/useGallery';
+import { BackgroundLayer } from '../components/gallery/BackgroundLayer';
+import { GallerySurface } from '../components/gallery/GallerySurface';
 
-type GalleryScreenProps = {
+type GalleryPageProps = {
   meta: AlbumMeta;
   selectedIds: Set<string>;
   selectionOrder: string[];
@@ -21,7 +21,7 @@ type GalleryScreenProps = {
   onPhotosLoaded: (photos: PhotoFile[]) => void;
 };
 
-export function GalleryScreen({
+export function GalleryPage({
   meta,
   selectedIds,
   selectionOrder,
@@ -29,7 +29,7 @@ export function GalleryScreen({
   onBack,
   onReview,
   onPhotosLoaded,
-}: GalleryScreenProps) {
+}: GalleryPageProps) {
   const {
     photos,
     loadState,
@@ -57,10 +57,11 @@ export function GalleryScreen({
   }, [selectionOrder, onToggle]);
 
   return (
-    <div className="relative min-h-[100dvh] w-full overflow-x-hidden bg-[#050508]">
+    <div className="relative min-h-[100dvh] w-full overflow-x-hidden bg-background">
       <BackgroundLayer />
 
       <GalleryHeader
+        meta={meta}
         eventName={meta.eventName}
         photoCount={photos.length}
         selectedCount={selectedIds.size}
@@ -114,12 +115,13 @@ export function GalleryScreen({
             />
             <PhotoViewer
               photos={photos}
-              index={viewerIndex!}
-              selected={selectedIds.has(currentPhoto!.id)}
+              index={viewerIndex ?? 0}
+              selected={selectedIds.has(currentPhoto?.id ?? '')}
               selectionIndex={currentSelectionIndex}
               onClose={() => setViewerIndex(null)}
               onNavigate={setViewerIndex}
               onToggle={onToggle}
+              meta={meta}
             />
           </>
         )}

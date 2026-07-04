@@ -1,8 +1,8 @@
 import { useAppFlow } from './hooks/useAppFlow';
-import { EntryScreen } from './components/entry/EntryScreen';
-import { GalleryScreen } from './components/gallery/GalleryScreen';
-import { SummaryScreen } from './components/SummaryScreen';
-import { DoneScreen } from './components/DoneScreen';
+import { EntryPage } from './pages/EntryPage';
+import { GalleryPage } from './pages/GalleryPage';
+import { SummaryPage } from './pages/SummaryPage';
+import { DonePage } from './pages/DonePage';
 
 export default function App() {
   const {
@@ -23,10 +23,10 @@ export default function App() {
 
   return (
     <div key={step} className="animate-page-enter min-h-[100dvh] bg-background">
-      {step === 'entry' && <EntryScreen onSubmit={handleEntrySubmit} />}
+      {step === 'entry' && <EntryPage onSubmit={handleEntrySubmit} />}
 
       {step === 'gallery' && meta && (
-        <GalleryScreen
+        <GalleryPage
           meta={meta}
           selectedIds={selectedIds}
           selectionOrder={selectionOrder}
@@ -38,7 +38,7 @@ export default function App() {
       )}
 
       {step === 'summary' && meta && (
-        <SummaryScreen
+        <SummaryPage
           meta={meta}
           selectedPhotos={selectedPhotos}
           onBack={() => setStep('gallery')}
@@ -47,11 +47,11 @@ export default function App() {
       )}
 
       {step === 'done' && meta && (
-        <DoneScreen
+        <DonePage
           clientName={meta.clientName}
           eventName={meta.eventName}
           selectedCount={selectedPhotos.length}
-          message={whatsappMessage}
+          message={whatsappMessage.full}
           onRestart={handleRestart}
           onReopenWhatsApp={handleReopenWhatsApp}
         />

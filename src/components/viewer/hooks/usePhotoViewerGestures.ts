@@ -8,9 +8,11 @@ type GestureHookProps = {
   canPrev: boolean;
   canNext: boolean;
   containerRef: React.RefObject<HTMLDivElement>;
+  wrapperRef: React.RefObject<HTMLDivElement>;
   showCtrl: () => void;
   toggleCtrl: () => void;
-  index: number; // Reset gestures when index changes
+  index: number;
+  naturalSize: { w: number; h: number };
 };
 
 const MIN_ZOOM = 1;
@@ -25,9 +27,11 @@ export function usePhotoViewerGestures({
   canPrev,
   canNext,
   containerRef,
+  wrapperRef,
   showCtrl,
   toggleCtrl,
   index,
+  naturalSize,
 }: GestureHookProps) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -42,6 +46,7 @@ export function usePhotoViewerGestures({
   const swipeStartRef = useRef(0);
   const isSwiping = useRef(false);
   const isPinching = useRef(false);
+  const doubleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const swipeX = useMotionValue(0);
 
@@ -56,17 +61,42 @@ export function usePhotoViewerGestures({
     setPan({ x: 0, y: 0 });
     setIsDragging(false);
     animate(swipeX, 0, { duration: 0 });
+
+    return () => {
+      if (doubleTapTimerRef.current) {
+        clearTimeout(doubleTapTimerRef.current);
+        doubleTapTimerRef.current = null;
+      }
+    };
   }, [index, swipeX]);
 
   const clampPan = useCallback((x: number, y: number, z: number) => {
     if (z <= 1) return { x: 0, y: 0 };
-    const limitX = (window.innerWidth * (z - 1)) / 2;
-    const limitY = (window.innerHeight * (z - 1)) / 2;
+    
+    const wrapper = wrapperRef.current;
+    const W = wrapper ? wrapper.clientWidth : window.innerWidth;
+    const H = wrapper ? wrapper.clientHeight : window.innerHeight;
+    
+    let limitX = (W * (z - 1)) / 2;
+    let limitY = (H * (z - 1)) / 2;
+    
+    if (naturalSize.w > 0 && naturalSize.h > 0) {
+      const ratio = Math.min(W / naturalSize.w, H / naturalSize.h);
+      const renderedW = naturalSize.w * ratio;
+      const renderedH = naturalSize.h * ratio;
+      
+      const scaledW = renderedW * z;
+      const scaledH = renderedH * z;
+      
+      limitX = Math.max(0, (scaledW - W) / 2);
+      limitY = Math.max(0, (scaledH - H) / 2);
+    }
+
     return {
       x: Math.min(limitX, Math.max(-limitX, x)),
       y: Math.min(limitY, Math.max(-limitY, y)),
     };
-  }, []);
+  }, [naturalSize]);
 
   const applyZoom = useCallback((z: number) => {
     const safe = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
@@ -94,7 +124,6 @@ export function usePhotoViewerGestures({
     const el = containerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const delta = e.deltaY < 0 ? 0.25 : -0.25;
       applyZoom(zoomRef.current + delta);
@@ -230,11 +259,13 @@ export function usePhotoViewerGestures({
           else applyZoom(2.5);
         } else {
           lastTapRef.current = now;
-          setTimeout(() => {
+          if (doubleTapTimerRef.current) clearTimeout(doubleTapTimerRef.current);
+          doubleTapTimerRef.current = setTimeout(() => {
             if (lastTapRef.current !== 0) {
               toggleCtrl();
               lastTapRef.current = 0;
             }
+            doubleTapTimerRef.current = null;
           }, DOUBLE_TAP_MS);
         }
       }

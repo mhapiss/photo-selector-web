@@ -24,9 +24,11 @@ export function useAutoHideControls(containerRef: React.RefObject<HTMLDivElement
     if (!el) return;
     const onMove = () => show();
     el.addEventListener('mousemove', onMove);
+    el.addEventListener('pointermove', onMove);
     el.addEventListener('mouseenter', onMove);
     return () => {
       el.removeEventListener('mousemove', onMove);
+      el.removeEventListener('pointermove', onMove);
       el.removeEventListener('mouseenter', onMove);
       if (timer.current) clearTimeout(timer.current);
     };

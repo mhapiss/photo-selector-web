@@ -37,9 +37,13 @@ export function usePhotoViewerKeyboard({
 }: KeyboardHookProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore keys when typing in input/textarea
+      // Ignore keys when typing in input/textarea (except Escape for range inputs)
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
+        if (e.key === 'Escape') {
+          e.target.blur();
+        } else {
+          return;
+        }
       }
 
       switch (e.key) {

@@ -11,69 +11,55 @@ type InfoSheetProps = {
   isMobile: boolean;
 };
 
-const iconBtnBase =
-  'flex items-center justify-center rounded-full transition-all duration-150 touch-manipulation shrink-0 focus-visible:ring-2 focus-visible:ring-white/40 focus:outline-none';
-const iconBtnSm = `${iconBtnBase} w-9 h-9 text-white/70 hover:text-white hover:bg-white/10 active:scale-90`;
+const panelStyle = {
+  background: 'rgba(22,22,24,0.97)',
+  backdropFilter: 'blur(24px)',
+  WebkitBackdropFilter: 'blur(24px)',
+};
 
 export const InfoSheet: React.FC<InfoSheetProps> = React.memo(({
-  photo,
-  fullResMode,
-  show,
-  onClose,
-  isMobile,
+  photo, fullResMode, show, onClose, isMobile,
 }) => {
   return (
     <AnimatePresence>
       {show && (
         <>
-          {/* Semi-transparent Backdrop overlay */}
           <motion.div
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[2px]"
+            className="fixed inset-0 z-40"
+            style={{ background: 'rgba(0,0,0,0.45)' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
             onClick={onClose}
           />
 
-          {/* Details Panel */}
           {isMobile ? (
-            // Mobile: slide up bottom sheet
             <motion.div
-              className="absolute bottom-0 left-0 right-0 z-50 max-h-[75vh] overflow-y-auto rounded-t-[2rem] border-t border-white/10 shadow-2xl pb-safe"
-              style={{
-                background: 'rgba(15, 15, 22, 0.96)',
-                backdropFilter: 'blur(35px)',
-                WebkitBackdropFilter: 'blur(35px)',
-              }}
+              className="absolute bottom-0 left-0 right-0 z-50 rounded-t-[18px] border-t border-white/08 overflow-hidden"
+              style={{ ...panelStyle, maxHeight: '72vh', overflowY: 'auto', paddingBottom: 'max(env(safe-area-inset-bottom,0px),16px)' }}
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              transition={{ type: 'spring' as const, stiffness: 320, damping: 34 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 34 }}
               drag="y"
               dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={0.25}
-              onDragEnd={(_, info) => {
-                if (info.offset.y > 100) onClose();
-              }}
+              dragElastic={0.2}
+              onDragEnd={(_, info) => { if (info.offset.y > 80) onClose(); }}
             >
-              <div className="flex justify-center pt-3.5 pb-1 pointer-events-none">
-                <div className="w-11 h-1 rounded-full bg-white/20" />
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="h-1 w-10 rounded-full bg-white/15" />
               </div>
               <InfoContent photo={photo} fullResMode={fullResMode} onClose={onClose} />
             </motion.div>
           ) : (
-            // Desktop: slide in side panel
             <motion.div
-              className="absolute right-0 top-0 bottom-0 z-50 w-80 lg:w-96 overflow-y-auto border-l border-white/10 shadow-2xl"
-              style={{
-                background: 'rgba(15, 15, 22, 0.94)',
-                backdropFilter: 'blur(40px)',
-                WebkitBackdropFilter: 'blur(40px)',
-              }}
-              initial={{ x: '100%', opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: '100%', opacity: 0 }}
-              transition={{ type: 'spring' as const, stiffness: 360, damping: 38 }}
+              className="absolute right-0 top-0 bottom-0 z-50 w-72 border-l border-white/06 overflow-y-auto"
+              style={panelStyle}
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', stiffness: 340, damping: 36 }}
             >
               <InfoContent photo={photo} fullResMode={fullResMode} onClose={onClose} />
             </motion.div>
@@ -84,57 +70,36 @@ export const InfoSheet: React.FC<InfoSheetProps> = React.memo(({
   );
 });
 
-type InfoContentProps = {
-  photo: PhotoFile;
-  fullResMode: boolean;
-  onClose: () => void;
-};
-
-const InfoContent: React.FC<InfoContentProps> = ({ photo, fullResMode, onClose }) => {
-  const formattedSize = photo.size
-    ? `${(photo.size / 1024 / 1024).toFixed(2)} MB`
-    : '-';
-
+const InfoContent: React.FC<{ photo: PhotoFile; fullResMode: boolean; onClose: () => void }> = ({
+  photo, fullResMode, onClose,
+}) => {
+  const sizeStr = photo.size ? `${(photo.size / 1024 / 1024).toFixed(2)} MB` : '—';
   return (
-    <div className="p-6 pt-4 text-white">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6 pb-2 border-b border-white/5">
-        <div className="flex items-center gap-2 text-white/90">
-          <Info size={16} className="text-violet-400" />
-          <h3 className="text-sm font-semibold tracking-wide">Detail File</h3>
+    <div className="p-5 text-white">
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2 text-white/70">
+          <Info size={14} className="text-white/40" />
+          <span className="text-[13px] font-medium">Detail File</span>
         </div>
-        <button
-          onClick={onClose}
-          className={iconBtnSm}
-          aria-label="Tutup detail"
-        >
-          <X size={16} strokeWidth={2.5} />
+        <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/08 transition-colors focus:outline-none" aria-label="Tutup">
+          <X size={14} strokeWidth={2} />
         </button>
       </div>
 
-      {/* Info List */}
-      <div className="space-y-1">
-        <div className="flex flex-col py-3 border-b border-white/5 gap-0.5">
-          <span className="text-[11px] text-white/40 font-medium uppercase tracking-wider">Nama File</span>
-          <span className="text-sm text-white/90 break-all font-medium leading-relaxed">{photo.name}</span>
-        </div>
-
-        <div className="flex justify-between py-3 border-b border-white/5 items-center">
-          <span className="text-xs text-white/40">Ukuran File</span>
-          <span className="text-sm text-white/85 font-medium">{formattedSize}</span>
-        </div>
-
-        <div className="flex justify-between py-3 border-b border-white/5 items-center">
-          <span className="text-xs text-white/40">Tipe Berkas</span>
-          <span className="text-sm text-white/85 font-medium">{photo.mimeType || 'image/jpeg'}</span>
-        </div>
-
-        <div className="flex justify-between py-3 border-b border-white/5 items-center">
-          <span className="text-xs text-white/40">Kualitas Tampilan</span>
-          <span className="text-sm text-white/85 font-medium">
-            {fullResMode ? 'Resolusi Penuh' : 'Optimal (Lancar)'}
-          </span>
-        </div>
+      <div className="space-y-0 divide-y divide-white/06">
+        {[
+          { label: 'Nama File', value: photo.name, mono: true },
+          { label: 'Ukuran', value: sizeStr },
+          { label: 'Tipe', value: photo.mimeType || 'image/jpeg' },
+          { label: 'Kualitas', value: fullResMode ? 'Resolusi Penuh' : 'Optimal' },
+        ].map(({ label, value, mono }) => (
+          <div key={label} className="py-3">
+            <p className="text-[11px] text-white/35 uppercase tracking-[0.12em] mb-1">{label}</p>
+            <p className={`text-[13px] text-white/80 break-all leading-snug ${mono ? 'font-mono text-[12px]' : ''}`}>
+              {value}
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   );
