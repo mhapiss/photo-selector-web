@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const IMAGE_MIME_PREFIX = "image/";
-const PAGE_SIZE = 1000;
+const PAGE_SIZE = 500;
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
 const IMAGE_EXTENSIONS_REGEX =
@@ -96,87 +96,6 @@ const mapError = (err: unknown) => {
   return { code, message, httpStatus };
 };
 
-/**
- * Recursively list all files across the root folder and any subfolders.
- * Uses PAGE_SIZE = 1000 so folders with hundreds of photos finish in 1 request.
- */
-async function listAllFiles(rootFolderId: string, apiKey: string): Promise<DriveFile[]> {
-  const all: DriveFile[] = [];
-  const folderQueue: string[] = [rootFolderId];
-  const visitedFolders = new Set<string>([rootFolderId]);
-  const seenFileIds = new Set<string>();
-
-  while (folderQueue.length > 0) {
-    const currentFolder = folderQueue.shift()!;
-    let pageToken: string | undefined;
-
-    do {
-      const url = new URL("https://www.googleapis.com/drive/v3/files");
-      url.searchParams.set("q", `'${currentFolder}' in parents and trashed = false`);
-      url.searchParams.set("key", apiKey);
-      url.searchParams.set("pageSize", String(PAGE_SIZE));
-      url.searchParams.set(
-        "fields",
-        "nextPageToken,files(id,name,mimeType,size,thumbnailLink,shortcutDetails(targetId,targetMimeType))",
-      );
-      url.searchParams.set("orderBy", "name");
-
-      if (pageToken) url.searchParams.set("pageToken", pageToken);
-
-      const res = await fetch(url.toString(), {
-        headers: { Accept: "application/json" },
-      });
-
-      if (res.status === 403) {
-        const body = await res.json().catch(() => ({}));
-        const reason = body?.error?.errors?.[0]?.reason ?? "forbidden";
-        if (currentFolder === rootFolderId) {
-          if (reason === "canOnlyShareOrganizationalFolders") {
-            throw new Error("FOLDER_PRIVATE_ORG");
-          }
-          if (reason === "keyInvalid" || reason === "badRequest") {
-            throw new Error("API_KEY_INVALID");
-          }
-          throw new Error("FOLDER_PRIVATE");
-        }
-        break; // Skip inaccessible subfolder
-      }
-
-      if (res.status === 404) {
-        if (currentFolder === rootFolderId) throw new Error("FOLDER_NOT_FOUND");
-        break;
-      }
-
-      if (!res.ok) {
-        if (currentFolder === rootFolderId) throw new Error("DRIVE_ERROR");
-        break;
-      }
-
-      const data = await res.json();
-      const files: DriveFile[] = Array.isArray(data.files) ? data.files : [];
-
-      for (const f of files) {
-        const isFolder = f.mimeType === FOLDER_MIME || (f.mimeType === "application/vnd.google-apps.shortcut" && f.shortcutDetails?.targetMimeType === FOLDER_MIME);
-        
-        if (isFolder) {
-          const targetId = f.mimeType === "application/vnd.google-apps.shortcut" && f.shortcutDetails ? f.shortcutDetails.targetId : f.id;
-          if (!visitedFolders.has(targetId) && visitedFolders.size < 50) {
-            visitedFolders.add(targetId);
-            folderQueue.push(targetId);
-          }
-        } else if (!seenFileIds.has(f.id)) {
-          seenFileIds.add(f.id);
-          all.push(f);
-        }
-      }
-
-      pageToken = data.nextPageToken;
-    } while (pageToken);
-  }
-
-  return all;
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -218,23 +137,111 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  try {
-    const files = await listAllFiles(folderId, apiKey);
-    const images: DriveFile[] = files.filter(isImageFile);
+  const bodyStream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      const send = (obj: any) => {
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      };
 
-    return Response.json(
-      {
-        ok: true,
-        count: images.length,
-        files: images.map(processFile),
-      },
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  } catch (err) {
-    const { code, message, httpStatus } = mapError(err);
-    return Response.json(
-      { ok: false, error: { code, message } },
-      { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  }
+      try {
+        const folderQueue: string[] = [folderId];
+        const visitedFolders = new Set<string>([folderId]);
+        const seenFileIds = new Set<string>();
+        let totalCount = 0;
+
+        while (folderQueue.length > 0) {
+          const currentFolder = folderQueue.shift()!;
+          let pageToken: string | undefined;
+
+          do {
+            const url = new URL("https://www.googleapis.com/drive/v3/files");
+            url.searchParams.set("q", `'${currentFolder}' in parents and trashed = false`);
+            url.searchParams.set("key", apiKey);
+            url.searchParams.set("pageSize", String(PAGE_SIZE));
+            url.searchParams.set("includeItemsFromAllDrives", "true");
+            url.searchParams.set("supportsAllDrives", "true");
+            url.searchParams.set(
+              "fields",
+              "nextPageToken,files(id,name,mimeType,size,thumbnailLink,shortcutDetails(targetId,targetMimeType))",
+            );
+            url.searchParams.set("orderBy", "name");
+
+            if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+            const res = await fetch(url.toString(), {
+              headers: { Accept: "application/json" },
+            });
+
+            if (res.status === 403) {
+              const body = await res.json().catch(() => ({}));
+              const reason = body?.error?.errors?.[0]?.reason ?? "forbidden";
+              if (currentFolder === folderId) {
+                if (reason === "canOnlyShareOrganizationalFolders") {
+                  throw new Error("FOLDER_PRIVATE_ORG");
+                }
+                if (reason === "keyInvalid" || reason === "badRequest") {
+                  throw new Error("API_KEY_INVALID");
+                }
+                throw new Error("FOLDER_PRIVATE");
+              }
+              break; // Skip inaccessible subfolder
+            }
+
+            if (res.status === 404) {
+              if (currentFolder === folderId) throw new Error("FOLDER_NOT_FOUND");
+              break;
+            }
+
+            if (!res.ok) {
+              if (currentFolder === folderId) throw new Error("DRIVE_ERROR");
+              break;
+            }
+
+            const data = await res.json();
+            const files: DriveFile[] = Array.isArray(data.files) ? data.files : [];
+            const imagesBatch = [];
+
+            for (const f of files) {
+              const isFolder = f.mimeType === FOLDER_MIME || (f.mimeType === "application/vnd.google-apps.shortcut" && f.shortcutDetails?.targetMimeType === FOLDER_MIME);
+              
+              if (isFolder) {
+                const targetId = f.mimeType === "application/vnd.google-apps.shortcut" && f.shortcutDetails ? f.shortcutDetails.targetId : f.id;
+                if (!visitedFolders.has(targetId) && visitedFolders.size < 50) {
+                  visitedFolders.add(targetId);
+                  folderQueue.push(targetId);
+                }
+              } else if (!seenFileIds.has(f.id)) {
+                seenFileIds.add(f.id);
+                if (isImageFile(f)) {
+                  imagesBatch.push(processFile(f));
+                  totalCount++;
+                }
+              }
+            }
+
+            if (imagesBatch.length > 0) {
+              send({ batch: imagesBatch });
+            }
+
+            pageToken = data.nextPageToken;
+          } while (pageToken);
+        }
+
+        send({ done: true, totalCount });
+        controller.close();
+      } catch (err) {
+        const { code, message } = mapError(err);
+        send({ error: { code, message } });
+        controller.close();
+      }
+    }
+  });
+
+  return new Response(bodyStream, {
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/x-ndjson",
+    },
+  });
 });

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { fetchDrivePhotos } from '../services/driveService';
+import { fetchDrivePhotosStream } from '../services/driveService';
 import { getCachedPhotos, setCachedPhotos } from '../services/metadataCache';
 import type { LoadError, LoadState, PhotoFile } from '../types';
 
@@ -33,17 +33,39 @@ export function useGallery(
       setLoadState('success');
       return;
     }
+    
+    setLoadState('streaming');
 
-    const result = await fetchDrivePhotos(folderId);
+    const result = await fetchDrivePhotosStream(folderId, (batch, isDone) => {
+      if (cancelledRef?.current) return;
+      
+      setPhotos(prev => {
+        if (batch.length === 0 && !isDone) return prev;
+        
+        const newPhotos = [...prev, ...batch];
+        // Deduplicate
+        const uniqueMap = new Map();
+        for (const p of newPhotos) {
+          uniqueMap.set(p.id, p);
+        }
+        const unique = Array.from(uniqueMap.values());
+        
+        onPhotosLoadedRef.current(unique);
+        
+        if (isDone) {
+          setCachedPhotos(folderId, unique);
+        }
+        return unique;
+      });
+
+      if (isDone) {
+        setLoadState('success');
+      }
+    });
 
     if (cancelledRef?.current) return;
 
-    if (result.ok) {
-      setPhotos(result.photos);
-      onPhotosLoadedRef.current(result.photos);
-      setLoadState('success');
-      setCachedPhotos(folderId, result.photos);
-    } else {
+    if (!result.ok) {
       setLoadError(result.error);
       setLoadState('error');
     }

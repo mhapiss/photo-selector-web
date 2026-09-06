@@ -57,7 +57,7 @@ export function GalleryPage({
   }, [selectionOrder, onToggle]);
 
   return (
-    <div className="relative min-h-[100dvh] w-full overflow-x-hidden bg-background">
+    <div className="relative min-h-[100dvh] w-full bg-background">
       <BackgroundLayer />
 
       <GalleryHeader

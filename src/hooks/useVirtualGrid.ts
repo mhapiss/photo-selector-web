@@ -48,8 +48,7 @@ export function useVirtualGrid({
         const currentEl = containerRef.current;
         if (currentEl) {
           const rect = currentEl.getBoundingClientRect();
-          const offsetTop = rect.top + window.scrollY;
-          const relativeScroll = Math.max(0, window.scrollY - offsetTop);
+          const relativeScroll = Math.max(0, -rect.top);
           setScrollTop(relativeScroll);
           setViewportHeight(window.innerHeight);
         }
