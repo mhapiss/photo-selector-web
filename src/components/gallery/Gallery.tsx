@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ImageOff, RefreshCw, Search } from 'lucide-react';
+import { ImageOff, Loader2, RefreshCw, Search } from 'lucide-react';
 import { PhotoCard } from './PhotoCard';
 import { SearchBar } from './SearchBar';
 import { SkeletonGrid } from './SkeletonGrid';
@@ -9,16 +9,19 @@ import {
   useResponsiveColumns,
   naturalSort,
 } from '../../hooks/useVirtualGrid';
-import type { LoadError, LoadState, PhotoFile } from '../../types';
+import type { LoadError, PhotoFile } from '../../types';
+import type { GalleryLoadState } from '../../hooks/useGallery';
 
 const GAP = 12;
 const ASPECT_RATIO = 1;
 const MAX_AUTO_RETRIES = 3;
 const AUTO_RETRY_DELAY = 3000; // 3 detik
+const PREFETCH_ROWS_AHEAD = 5;
+const MAX_CONCURRENT_PREFETCH = 4;
 
 type GalleryProps = {
   photos: PhotoFile[];
-  loadState: LoadState;
+  loadState: GalleryLoadState;
   loadError: LoadError | null;
   selectedIds: Set<string>;
   selectionOrder: string[];
@@ -27,6 +30,37 @@ type GalleryProps = {
   onManualPaste: () => void;
   onOpenPhoto: (index: number) => void;
 };
+
+// Simple prefetch queue to warm browser cache for upcoming thumbnails
+const prefetchedUrls = new Set<string>();
+let activePrefetches = 0;
+const prefetchQueue: string[] = [];
+
+function drainPrefetchQueue() {
+  while (activePrefetches < MAX_CONCURRENT_PREFETCH && prefetchQueue.length > 0) {
+    const url = prefetchQueue.shift()!;
+    if (prefetchedUrls.has(url)) continue;
+    prefetchedUrls.add(url);
+    activePrefetches++;
+    const img = new Image();
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer';
+    img.onload = img.onerror = () => {
+      activePrefetches--;
+      drainPrefetchQueue();
+    };
+    img.src = url;
+  }
+}
+
+function enqueuePrefetch(urls: string[]) {
+  for (const url of urls) {
+    if (!prefetchedUrls.has(url) && !prefetchQueue.includes(url)) {
+      prefetchQueue.push(url);
+    }
+  }
+  drainPrefetchQueue();
+}
 
 export function Gallery({
   photos,
@@ -102,6 +136,23 @@ export function Gallery({
     return filtered.slice(0, Math.min(filtered.length, columnCount * 20));
   }, [filtered, visibleRange.start, visibleRange.end, columnCount]);
 
+  // Smart prefetch: warm thumbnails for photos ahead of the visible range
+  useEffect(() => {
+    if (filtered.length === 0 || columnCount === 0) return;
+    const prefetchEnd = Math.min(
+      filtered.length,
+      visibleRange.end + columnCount * PREFETCH_ROWS_AHEAD
+    );
+    if (prefetchEnd <= visibleRange.end) return;
+
+    const urls: string[] = [];
+    for (let i = visibleRange.end; i < prefetchEnd; i++) {
+      const photo = filtered[i];
+      if (photo?.thumbnailUrl) urls.push(photo.thumbnailUrl);
+    }
+    if (urls.length > 0) enqueuePrefetch(urls);
+  }, [filtered, visibleRange.end, columnCount]);
+
   // ===== AUTO RETRY =====
   useEffect(() => {
     // Reset retry count saat photos berubah (berhasil load)
@@ -137,7 +188,8 @@ export function Gallery({
     }
   }, [loadState, loadError, autoRetryCount, onRetry]);
 
-  if (loadState === 'loading') {
+  // Show skeleton only when truly loading (no photos yet)
+  if (loadState === 'loading' && photos.length === 0) {
     return (
       <div className="px-2 py-4 sm:px-4">
         <div className="mb-4 h-14 w-full max-w-md rounded-3xl skeleton" />
@@ -218,6 +270,8 @@ export function Gallery({
     );
   }
 
+  const isStreaming = loadState === 'streaming';
+
   return (
     <div className="px-3 py-3 pb-28 sm:px-4 sm:py-4 sm:pb-32">
       <motion.div
@@ -234,7 +288,7 @@ export function Gallery({
       </motion.div>
 
       <AnimatePresence mode="wait">
-        {filtered.length === 0 ? (
+        {filtered.length === 0 && !isStreaming ? (
           <motion.div
             key="empty"
             className="flex min-h-[40dvh] flex-col items-center justify-center text-center"
@@ -303,6 +357,19 @@ export function Gallery({
                 </div>
               </div>
             </div>
+
+            {/* Streaming indicator — shown while more photos are loading */}
+            {isStreaming && (
+              <motion.div
+                className="flex items-center justify-center gap-2 py-6 text-sm text-ink/40"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                <Loader2 size={14} className="animate-spin" />
+                <span>Memuat foto lainnya...</span>
+              </motion.div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

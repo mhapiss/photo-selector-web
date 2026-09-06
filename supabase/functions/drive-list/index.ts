@@ -91,12 +91,14 @@ Deno.serve(async (req: Request) => {
   }
 
   let folderId = "";
+  let isJsonFormat = false;
   try {
+    const u = new URL(req.url);
+    isJsonFormat = u.searchParams.get("format") === "json" || req.headers.get("accept")?.includes("application/json") || false;
     if (req.method === "POST") {
       const body = await req.json();
       folderId = body?.folderId ?? "";
     } else {
-      const u = new URL(req.url);
       folderId = u.searchParams.get("folderId") ?? "";
     }
   } catch {
@@ -110,32 +112,7 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  try {
-    const files = await listAllFiles(folderId, apiKey);
-    const images: DriveFile[] = files.filter(
-      (f) =>
-        f.mimeType?.startsWith(IMAGE_MIME_PREFIX) ||
-        (f.name && /\.(jpe?g|png|webp|heic|gif|bmp|tiff?|raw|cr2|nef|arw|dng)$/i.test(f.name)),
-    );
-
-    return Response.json(
-      {
-        ok: true,
-        count: images.length,
-        files: images.map((f) => ({
-          id: f.id,
-          fileId: f.id,
-          name: f.name ?? f.id,
-          thumbnailUrl:
-            f.thumbnailLink ??
-            `https://drive.google.com/thumbnail?id=${f.id}&sz=w400`,
-          directUrl: `https://drive.google.com/file/d/${f.id}/view`,
-          size: f.size ? Number(f.size) : undefined,
-        })),
-      },
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  } catch (err) {
+  const mapError = (err: unknown) => {
     const msg = err instanceof Error ? err.message : "unknown";
     let code = "network";
     let httpStatus = 502;
@@ -161,9 +138,125 @@ Deno.serve(async (req: Request) => {
       message = "Folder not found. Please check the link is correct.";
     }
 
-    return Response.json(
-      { ok: false, error: { code, message } },
-      { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return { code, message, httpStatus };
+  };
+
+  const processFile = (f: DriveFile) => ({
+    id: f.id,
+    fileId: f.id,
+    name: f.name ?? f.id,
+    thumbnailUrl:
+      f.thumbnailLink ??
+      `https://drive.google.com/thumbnail?id=${f.id}&sz=w400`,
+    directUrl: `https://drive.google.com/file/d/${f.id}/view`,
+    size: f.size ? Number(f.size) : undefined,
+  });
+
+  const isImageFile = (f: DriveFile): boolean =>
+    !!(f.mimeType?.startsWith(IMAGE_MIME_PREFIX) ||
+    (f.name && /\.(jpe?g|png|webp|heic|gif|bmp|tiff?|raw|cr2|nef|arw|dng)$/i.test(f.name)));
+
+  if (isJsonFormat) {
+    try {
+      const files = await listAllFiles(folderId, apiKey);
+      const images: DriveFile[] = files.filter(isImageFile);
+
+      return Response.json(
+        {
+          ok: true,
+          count: images.length,
+          files: images.map(processFile),
+        },
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    } catch (err) {
+      const { code, message, httpStatus } = mapError(err);
+      return Response.json(
+        { ok: false, error: { code, message } },
+        { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
   }
+
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream({
+      async start(controller) {
+        let pageToken: string | undefined;
+        let totalCount = 0;
+
+        try {
+          do {
+            const url = new URL("https://www.googleapis.com/drive/v3/files");
+            url.searchParams.set("q", `'${folderId}' in parents and trashed = false`);
+            url.searchParams.set("key", apiKey);
+            url.searchParams.set("pageSize", String(PAGE_SIZE));
+            url.searchParams.set(
+              "fields",
+              "nextPageToken,files(id,name,mimeType,size,thumbnailLink)",
+            );
+            url.searchParams.set("orderBy", "name");
+
+            if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+            const res = await fetch(url.toString(), {
+              headers: { Accept: "application/json" },
+            });
+
+            if (res.status === 403) {
+              const body = await res.json().catch(() => ({}));
+              const reason = body?.error?.errors?.[0]?.reason ?? "forbidden";
+              if (reason === "canOnlyShareOrganizationalFolders") {
+                throw new Error("FOLDER_PRIVATE_ORG");
+              }
+              if (reason === "keyInvalid" || reason === "badRequest") {
+                throw new Error("API_KEY_INVALID");
+              }
+              throw new Error("FOLDER_PRIVATE");
+            }
+
+            if (res.status === 404) {
+              throw new Error("FOLDER_NOT_FOUND");
+            }
+
+            if (!res.ok) {
+              throw new Error("DRIVE_ERROR");
+            }
+
+            const data = await res.json();
+            const files = Array.isArray(data.files) ? data.files : [];
+            const images = files.filter(isImageFile);
+            
+            totalCount += images.length;
+            const batch = images.map(processFile);
+            const hasMore = !!data.nextPageToken;
+            
+            controller.enqueue(
+              encoder.encode(JSON.stringify({ batch, hasMore }) + "\n")
+            );
+
+            pageToken = data.nextPageToken;
+          } while (pageToken);
+
+          controller.enqueue(
+            encoder.encode(JSON.stringify({ done: true, totalCount }) + "\n")
+          );
+        } catch (err) {
+          const { code, message } = mapError(err);
+          controller.enqueue(
+            encoder.encode(JSON.stringify({ error: { code, message } }) + "\n")
+          );
+        } finally {
+          controller.close();
+        }
+      },
+    }),
+    { 
+      headers: { 
+        ...corsHeaders, 
+        "Content-Type": "application/x-ndjson",
+        "Cache-Control": "no-cache",
+      } 
+    }
+  );
 });

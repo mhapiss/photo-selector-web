@@ -6,7 +6,7 @@
  * large  = zoom
  */
 
-const MAX_CACHE_SIZE = 50;
+const MAX_CACHE_SIZE = 200;
 
 const imageCache = new Map<
   string,
@@ -17,6 +17,14 @@ const pendingCache = new Map<
   string,
   Promise<HTMLImageElement>
 >();
+
+const accessOrder: string[] = [];
+
+function touchKey(key: string) {
+  const idx = accessOrder.indexOf(key);
+  if (idx >= 0) accessOrder.splice(idx, 1);
+  accessOrder.push(key);
+}
 
 export function driveThumb(
   fileId: string,
@@ -50,6 +58,7 @@ export function preloadImage(
     imageCache.get(url);
 
   if (cached) {
+    touchKey(url);
     return Promise.resolve(
       cached
     );
@@ -75,15 +84,16 @@ export function preloadImage(
           'eager';
 
         img.onload = () => {
-          if (imageCache.size >= MAX_CACHE_SIZE) {
-            const firstKey = imageCache.keys().next().value;
-            if (firstKey) imageCache.delete(firstKey);
+          while (imageCache.size >= MAX_CACHE_SIZE && accessOrder.length > 0) {
+            const oldest = accessOrder.shift()!;
+            imageCache.delete(oldest);
           }
 
           imageCache.set(
             url,
             img
           );
+          touchKey(url);
 
           pendingCache.delete(
             url
