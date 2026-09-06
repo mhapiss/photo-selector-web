@@ -1,6 +1,6 @@
 import type { PhotoFile } from '../types';
 
-const CACHE_PREFIX = 'ps_meta_';
+const CACHE_PREFIX = 'ps_meta_v3_';
 const MAX_CACHED_FOLDERS = 5;
 const TTL_MS = 30 * 60 * 1000; // 30 minutes
 
