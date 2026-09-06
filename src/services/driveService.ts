@@ -6,7 +6,7 @@ import { supabaseUrl, supabaseAnonKey } from './supabaseService';
 // ==========================================
 
 const IMAGE_EXTENSIONS =
-  /\.(jpe?g|png|webp|heic|gif|bmp|tiff?|raw|cr2|nef|arw|dng)$/i;
+  /\.(jpe?g|png|webp|heic|heif|avif|gif|bmp|tiff?|raw|cr2|cr3|nef|arw|dng|raf|rw2|orf|pef|srw|psd)$/i;
 
 const FOLDER_PATTERNS = [
   /\/folders\/([A-Za-z0-9_-]{20,})/,
