@@ -28,30 +28,44 @@ interface DriveFile {
   size?: string;
   thumbnailLink?: string;
   hasThumbnail?: boolean;
+  shortcutDetails?: {
+    targetId: string;
+    targetMimeType: string;
+  };
 }
 
 const isImageFile = (f: DriveFile): boolean => {
-  if (f.mimeType === FOLDER_MIME) return false;
-  if (f.mimeType?.startsWith("video/") || f.mimeType?.startsWith("audio/")) return false;
-  if (f.mimeType && NON_IMAGE_MIMES.includes(f.mimeType)) return false;
+  const mime = f.mimeType === "application/vnd.google-apps.shortcut"
+    ? f.shortcutDetails?.targetMimeType
+    : f.mimeType;
 
-  if (f.mimeType?.startsWith(IMAGE_MIME_PREFIX)) return true;
+  if (mime === FOLDER_MIME) return false;
+  if (mime?.startsWith("video/") || mime?.startsWith("audio/")) return false;
+  if (mime && NON_IMAGE_MIMES.includes(mime)) return false;
+
+  if (mime?.startsWith(IMAGE_MIME_PREFIX)) return true;
   if (f.name && IMAGE_EXTENSIONS_REGEX.test(f.name)) return true;
   if (f.thumbnailLink) return true;
 
   return false;
 };
 
-const processFile = (f: DriveFile) => ({
-  id: f.id,
-  fileId: f.id,
-  name: f.name ?? f.id,
-  thumbnailUrl:
-    f.thumbnailLink ??
-    `https://drive.google.com/thumbnail?id=${f.id}&sz=w400`,
-  directUrl: `https://drive.google.com/file/d/${f.id}/view`,
-  size: f.size ? Number(f.size) : undefined,
-});
+const processFile = (f: DriveFile) => {
+  const targetId = f.mimeType === "application/vnd.google-apps.shortcut" && f.shortcutDetails 
+    ? f.shortcutDetails.targetId 
+    : f.id;
+    
+  return {
+    id: f.id,
+    fileId: targetId,
+    name: f.name ?? f.id,
+    thumbnailUrl:
+      f.thumbnailLink ??
+      `https://drive.google.com/thumbnail?id=${targetId}&sz=w400`,
+    directUrl: `https://drive.google.com/file/d/${targetId}/view`,
+    size: f.size ? Number(f.size) : undefined,
+  };
+};
 
 const mapError = (err: unknown) => {
   const msg = err instanceof Error ? err.message : "unknown";
@@ -103,7 +117,7 @@ async function listAllFiles(rootFolderId: string, apiKey: string): Promise<Drive
       url.searchParams.set("pageSize", String(PAGE_SIZE));
       url.searchParams.set(
         "fields",
-        "nextPageToken,files(id,name,mimeType,size,thumbnailLink)",
+        "nextPageToken,files(id,name,mimeType,size,thumbnailLink,shortcutDetails(targetId,targetMimeType))",
       );
       url.searchParams.set("orderBy", "name");
 
@@ -142,10 +156,13 @@ async function listAllFiles(rootFolderId: string, apiKey: string): Promise<Drive
       const files: DriveFile[] = Array.isArray(data.files) ? data.files : [];
 
       for (const f of files) {
-        if (f.mimeType === FOLDER_MIME) {
-          if (!visitedFolders.has(f.id) && visitedFolders.size < 50) {
-            visitedFolders.add(f.id);
-            folderQueue.push(f.id);
+        const isFolder = f.mimeType === FOLDER_MIME || (f.mimeType === "application/vnd.google-apps.shortcut" && f.shortcutDetails?.targetMimeType === FOLDER_MIME);
+        
+        if (isFolder) {
+          const targetId = f.mimeType === "application/vnd.google-apps.shortcut" && f.shortcutDetails ? f.shortcutDetails.targetId : f.id;
+          if (!visitedFolders.has(targetId) && visitedFolders.size < 50) {
+            visitedFolders.add(targetId);
+            folderQueue.push(targetId);
           }
         } else if (!seenFileIds.has(f.id)) {
           seenFileIds.add(f.id);
