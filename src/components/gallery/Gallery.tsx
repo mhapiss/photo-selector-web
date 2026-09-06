@@ -16,8 +16,6 @@ const GAP = 12;
 const ASPECT_RATIO = 1;
 const MAX_AUTO_RETRIES = 3;
 const AUTO_RETRY_DELAY = 3000; // 3 detik
-const PREFETCH_ROWS_AHEAD = 5;
-const MAX_CONCURRENT_PREFETCH = 4;
 
 type GalleryProps = {
   photos: PhotoFile[];
@@ -30,37 +28,6 @@ type GalleryProps = {
   onManualPaste: () => void;
   onOpenPhoto: (index: number) => void;
 };
-
-// Simple prefetch queue to warm browser cache for upcoming thumbnails
-const prefetchedUrls = new Set<string>();
-let activePrefetches = 0;
-const prefetchQueue: string[] = [];
-
-function drainPrefetchQueue() {
-  while (activePrefetches < MAX_CONCURRENT_PREFETCH && prefetchQueue.length > 0) {
-    const url = prefetchQueue.shift()!;
-    if (prefetchedUrls.has(url)) continue;
-    prefetchedUrls.add(url);
-    activePrefetches++;
-    const img = new Image();
-    img.decoding = 'async';
-    img.referrerPolicy = 'no-referrer';
-    img.onload = img.onerror = () => {
-      activePrefetches--;
-      drainPrefetchQueue();
-    };
-    img.src = url;
-  }
-}
-
-function enqueuePrefetch(urls: string[]) {
-  for (const url of urls) {
-    if (!prefetchedUrls.has(url) && !prefetchQueue.includes(url)) {
-      prefetchQueue.push(url);
-    }
-  }
-  drainPrefetchQueue();
-}
 
 export function Gallery({
   photos,
@@ -136,22 +103,6 @@ export function Gallery({
     return filtered.slice(0, Math.min(filtered.length, columnCount * 20));
   }, [filtered, visibleRange.start, visibleRange.end, columnCount]);
 
-  // Smart prefetch: warm thumbnails for photos ahead of the visible range
-  useEffect(() => {
-    if (filtered.length === 0 || columnCount === 0) return;
-    const prefetchEnd = Math.min(
-      filtered.length,
-      visibleRange.end + columnCount * PREFETCH_ROWS_AHEAD
-    );
-    if (prefetchEnd <= visibleRange.end) return;
-
-    const urls: string[] = [];
-    for (let i = visibleRange.end; i < prefetchEnd; i++) {
-      const photo = filtered[i];
-      if (photo?.thumbnailUrl) urls.push(photo.thumbnailUrl);
-    }
-    if (urls.length > 0) enqueuePrefetch(urls);
-  }, [filtered, visibleRange.end, columnCount]);
 
   // ===== AUTO RETRY =====
   useEffect(() => {

@@ -35,10 +35,6 @@ export function extractFolderId(link: string): string | null {
  * caching (to avoid Google Drive 429 rate limits), and resizing.
  */
 export function optimizeImageUrl(url: string, width: number): string {
-  // Skip wsrv.nl proxy for Google's own CDN — it's already fast, WebP-capable, globally cached
-  if (url.includes('lh3.googleusercontent.com') || url.includes('lh4.googleusercontent.com') || url.includes('lh5.googleusercontent.com')) {
-    return url;
-  }
   // Remove protocol, wsrv.nl handles domain directly or encoded
   const cleanUrl = url.replace(/^https?:\/\//, '');
   // output=webp, w=width, we=animated webp for gifs, il=interlaced
@@ -132,14 +128,9 @@ function normalizePhotoFile(rawFile: unknown): PhotoFile | null {
     thumbnailUrl = `https://drive.google.com/thumbnail?id=${id}&sz=w400`;
   }
 
-  // If it's an lh3.googleusercontent.com link, resize via URL parameter (no wsrv.nl needed)
-  const isGoogleCdn = thumbnailUrl.includes('lh3.googleusercontent.com') ||
-                       thumbnailUrl.includes('lh4.googleusercontent.com') ||
-                       thumbnailUrl.includes('lh5.googleusercontent.com');
-
-  if (isGoogleCdn) {
-    // Normalize size parameter for gallery thumbnail
-    thumbnailUrl = thumbnailUrl.replace(/=s\d+/, '=s400').replace(/=w\d+/, '=s400');
+  // If it's an lh3.googleusercontent.com link, we can resize it by changing the =s parameter
+  if (thumbnailUrl.includes('lh3.googleusercontent.com')) {
+    thumbnailUrl = thumbnailUrl.replace(/=s\d+/, '=w600');
   }
 
   const originalDirectUrl = file.webContentLink || 
@@ -150,8 +141,8 @@ function normalizePhotoFile(rawFile: unknown): PhotoFile | null {
     id,
     name,
     mimeType: file.mimeType || 'image/jpeg',
-    // Google CDN URLs are already fast & WebP-capable — skip wsrv.nl proxy
-    thumbnailUrl: isGoogleCdn ? thumbnailUrl : optimizeImageUrl(thumbnailUrl, 400),
+    // DO NOT wrap thumbnailUrl in wsrv.nl if it's already an lh3 CDN link (it breaks it and lh3 doesn't have 429 limits)
+    thumbnailUrl: thumbnailUrl.includes('lh3.googleusercontent.com') ? thumbnailUrl : optimizeImageUrl(thumbnailUrl, 600),
     // Optimize direct URL for full-screen viewer (2000px max width) via wsrv.nl
     directUrl: optimizeImageUrl(originalDirectUrl, 2000),
     // Keep original for native downloads if needed

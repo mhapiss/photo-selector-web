@@ -11,37 +11,20 @@ type PhotoCardProps = {
   onOpen: () => void;
 };
 
-/**
- * Pick thumbnail size based on viewport width to avoid downloading
- * oversized images on mobile. Matches card sizes:
- * - Mobile 2-col (~180px cards) → 200px thumbnail
- * - Mobile 3-col (~120px cards) → 150px thumbnail  
- * - Tablet/Desktop → 250px thumbnail
- */
-function getResponsiveThumbSize(): number {
-  const w = typeof window !== 'undefined' ? window.innerWidth : 1024;
-  if (w < 400) return 200; // 2-col mobile
-  if (w < 640) return 200; // 3-col mobile, cards ~180px
-  if (w < 1024) return 250; // tablet
-  return 300; // desktop
-}
-
 function PhotoCardComponent({ photo, selected, selectionIndex, onToggle, onOpen }: PhotoCardProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [urlIndex, setUrlIndex] = useState(0);
 
   const thumbnailUrls = useMemo(() => {
-    const sz = getResponsiveThumbSize();
     const urls: string[] = [];
     if (photo.thumbnailUrl) {
-      // Resize thumbnail to match actual card size
-      urls.push(photo.thumbnailUrl.replace(/=s\d+/, `=s${sz}`).replace(/=w\d+/, `=s${sz}`));
       urls.push(photo.thumbnailUrl);
+      urls.push(photo.thumbnailUrl.replace(/=s\d+/, '=s400'));
     }
     urls.push(
-      `https://drive.google.com/thumbnail?id=${photo.id}&sz=w${sz}`,
-      `https://lh3.googleusercontent.com/d/${photo.id}=s${sz}`,
+      `https://drive.google.com/thumbnail?id=${photo.id}&sz=w400`,
+      `https://lh3.googleusercontent.com/d/${photo.id}=s400`,
     );
     if (photo.webContentLink) urls.push(photo.webContentLink);
     if (photo.directUrl) urls.push(photo.directUrl);
@@ -81,8 +64,6 @@ function PhotoCardComponent({ photo, selected, selectionIndex, onToggle, onOpen 
         outline: selected ? '3px solid var(--color-primary)' : '1px solid var(--color-border)',
         outlineOffset: selected ? 2 : 0,
         transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-        contentVisibility: 'auto',
-        containIntrinsicSize: 'auto 200px',
       }}
     >
       {/* Image area */}
@@ -104,6 +85,7 @@ function PhotoCardComponent({ photo, selected, selectionIndex, onToggle, onOpen 
                 alt={photo.name}
                 loading="lazy"
                 decoding="async"
+                referrerPolicy="no-referrer"
                 draggable={false}
                 className={[
                   'h-full w-full object-cover no-drag',
